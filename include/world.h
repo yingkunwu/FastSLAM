@@ -6,6 +6,7 @@ class World
 {
 public:
     World(int size_x, int size_y);
+    void read_map(std::string filename);
     void set_landmarks(double x, double y);
     std::vector<double> get_landmarks();
 

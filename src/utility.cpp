@@ -50,7 +50,7 @@ double utility::evaluation(Robot *r, std::vector<particle> *p, World *world)
     return sum / p->size();
 }
 
-void utility::visualization(Robot *robot, int step, std::vector<particle> *belief, std::vector<particle> *new_belief, World *w)
+void utility::visualization(Robot *robot, int step, std::vector<particle> *belief, World *w)
 {
     float x_min = 0.0;
     float y_min = 0.0;
@@ -74,14 +74,6 @@ void utility::visualization(Robot *robot, int step, std::vector<particle> *belie
     data.clear();
     data.push_back({robot->get_x(), robot->get_y()});
     figure.series("Robot").set(data).type(cvplot::Dots).color(cvplot::Black);
-
-    //Draw resampled particles in yellow
-    data.clear();
-    for (auto i = 0; i < n; i++)
-    {
-        data.push_back({(*new_belief)[i].r.get_x(), (*new_belief)[i].r.get_y()});
-    }
-    figure.series("Resampled Particles").set(data).type(cvplot::Dots).color(cvplot::Yellow);
 
     //Draw particles in green
     data.clear();

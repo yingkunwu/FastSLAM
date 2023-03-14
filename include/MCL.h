@@ -21,7 +21,7 @@ class MCL
 public:
     MCL(std::vector<particle> X, command U, std::vector<double> Z); 
     // resample the particles and return the new belief
-    std::vector<particle> resample();
+    std::vector<particle> resample(int i);
 
 private:
     // robot sensor measurements

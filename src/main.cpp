@@ -3,6 +3,7 @@
 #include "../include/utility.h"
 #include <iostream>
 
+
 int main()
 {
     // create a world
@@ -14,9 +15,11 @@ int main()
     {
         w.set_landmarks(landmarks[i - 1], landmarks[i]);
     }
+    //w.read_map("../scene1.png");
+    //exit(1);
 
     // create a robot
-    Robot R(w);
+    Robot R(w.get_x(), w.get_y(), w.get_landmarks());
     // set robot noise
     R.set_noise(0.2, 0.1, 3.0);
     // set robot position inside the world
@@ -35,29 +38,28 @@ int main()
     std::vector<particle> p;
     for (int i = 0; i < NUMBER_OF_PARTICLES; ++i)
     {
-        p.emplace_back(Robot(w), 0.0);
+        p.emplace_back(Robot(w.get_x(), w.get_y(), w.get_landmarks()), 0.0);
     }
 
     // set number of iterations for mcl
-    int NUMBER_OF_ITERATIONS = 100;
+    int NUMBER_OF_ITERATIONS = 1000;
 
     // create control command
     command u1(0.5, 0.1);
 
     // resample
-    for (int i = 0; i < NUMBER_OF_ITERATIONS; ++i)
+    for (int i = 1; i <= NUMBER_OF_ITERATIONS; ++i)
     {
         // move the robot
         R.move(u1.turn, u1.forward);
         // get sensor measurements
-        std::vector<double> z = R.sense();
+        std::vector<double> z = R.sense(true);
         std::cout << R.get_pose() << std::endl;
         // mcl
-        std::vector<particle> belief = MCL(p, u1, z).resample();
-        std::cout << "[Error]" << utility::evaluation(&R, &belief, &w) << std::endl;
+        p = MCL(p, u1, z).resample(i);
+        std::cout << "[Error]" << utility::evaluation(&R, &p, &w) << std::endl;
         //set new blief
-        utility::visualization(&R, i, &p, &belief, &w);
-        p = belief;
+        utility::visualization(&R, i, &p, &w);
     }
 
     return 0;

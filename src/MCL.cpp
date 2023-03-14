@@ -55,31 +55,37 @@ void MCL::normalize()
 }
 
 // implement low variance resampling
-std::vector<particle> MCL::resample()
+std::vector<particle> MCL::resample(int idx)
 {
     // move particles
     motion_update();
     // sense
-    sensor_update();
-    // normalize weight of particles
-    normalize();
-    // use resampling wheel algorithm to resample particles
-    std::vector<particle> p;
-    // get random index
-    double J_inv = (double) 1 / X__.size();
-    double r = utility::get_random_number(0.0, J_inv);
-    double c = X__[0].w;
-    int i = 0;
-    for (int j = 0; j < X__.size(); ++j)
+    if (idx % 10 == 0)
     {
-        double U = r + j * J_inv;
-        while (U > c)
+        sensor_update();
+        // normalize weight of particles
+        normalize();
+        // use resampling wheel algorithm to resample particles
+        std::vector<particle> p;
+        // get random index
+        double J_inv = (double) 1 / X__.size();
+        double r = utility::get_random_number(0.0, J_inv);
+        double c = X__[0].w;
+        int i = 0;
+        for (int j = 0; j < X__.size(); ++j)
         {
-            i ++;
-            c += X__[i].w;
+            double U = r + j * J_inv;
+            while (U > c)
+            {
+                i ++;
+                c += X__[i].w;
+            }
+            // select particle
+            p.push_back(X__[i]);
         }
-        // select particle
-        p.push_back(X__[i]);
+        return p;
+    } else
+    {
+        return X__;
     }
-    return p;
 }

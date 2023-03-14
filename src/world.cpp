@@ -1,8 +1,28 @@
 #include "../include/world.h"
 #include <iostream>
 #include <assert.h>
+#include <opencv2/opencv.hpp>
 
 World::World(int size_x, int size_y) : x__(size_x), y__(size_y) {}
+
+void World::read_map(std::string filename)
+{
+    // Read the image file 
+    cv::Mat img = cv::imread("../scene1.png");
+
+    std::vector<std::vector<int>> grid = std::vector<std::vector<int>>(img.rows, std::vector<int>(img.cols, 0));
+
+    for(int i = 0; i < img.rows; i++) {
+        for(int j = 0; j < img.cols; j++) {
+            cv::Vec3b rgb = img.at<cv::Vec3b>(i, j);
+            if (((int) rgb[0] == 255) && ((int) rgb[1] == 255) && ((int) rgb[2] == 255)) {
+                grid[i][j] = 1;
+            } else {
+                grid[i][j] = 0;
+            }
+        }
+    }
+}
 
 void World::set_landmarks(double x, double y)
 {

@@ -19,5 +19,5 @@ namespace utility
     // evaluate each belief
     double evaluation(Robot *r, std::vector<particle> *belief, World *w);
     // visualize the robot and particles
-    void visualization(Robot *robot, int step, std::vector<particle> *belief, std::vector<particle> *new_belief, World *w);
+    void visualization(Robot *robot, int step, std::vector<particle> *belief, World *w);
 } // namespace utility
