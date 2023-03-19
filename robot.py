@@ -3,21 +3,16 @@ import numpy as np
 
 
 class Robot(object):
-    def __init__(self, x, y, landmarks):
-        self.x = random.random() * x
-        self.y = random.random() * y
-        self.orientation = random.random() * 2 * np.pi
+    def __init__(self, x, y, orientation, landmarks):
+        self.x = x
+        self.y = y
+        self.orientation = orientation
 
         self.landmarks = landmarks
 
         self.forward_noise = 0.0
         self.turn_noise = 0.0
         self.sense_noise = 0.0
-
-    def set_states(self, x, y, orientation):
-        self.x = x
-        self.y = y
-        self.orientation = orientation
 
     def set_noise(self, forward_noise, turn_noise, sense_noise):
         self.forward_noise = forward_noise
@@ -34,18 +29,16 @@ class Robot(object):
 
         return measurements
     
-    def motion(self, turn, forward):
-        self.orientation = (self.orientation + turn + random.gauss(0.0, self.turn_noise)) % (2 * np.pi)
+    def motion(self, turn, forward, noise=False):
+        self.orientation = self.orientation + turn
+        if noise:
+            self.orientation = self.orientation + random.gauss(0.0, self.turn_noise)
+        self.orientation = self.orientation % (2 * np.pi)
 
-        dist = forward + random.gauss(0.0, self.forward_noise)
-        self.x = self.x + dist * np.cos(self.orientation)
-        self.y = self.y + dist * np.sin(self.orientation)
-
-        # 不知道為啥一定要重新initialize才會work
-        r = Robot(self.x, self.y, self.landmarks)
-        r.set_noise(0.2, 0.1, 3.0)
-        r.set_states(self.x, self.y, self.orientation)
-        return r
+        if noise:
+            forward = forward + random.gauss(0.0, self.forward_noise)
+        self.x = self.x + forward * np.cos(self.orientation)
+        self.y = self.y + forward * np.sin(self.orientation)
 
     def measurement_prob(self, measurement):
         prob = 1.0

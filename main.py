@@ -1,48 +1,49 @@
 import numpy as np
 import random
+import copy
 
 from world import World
 from robot import Robot
 from utils import *
+from config import SCENCES
 
 
 if __name__ == "__main__":
+    config = SCENCES['scene-1']
+
     # create a world map
-    world = World(100, 100)
+    world = World()
+    world.read_map(config['map'])
+    occupancy = world.get_occupancy()
 
     # create landmarks positions
-    landmarks = [[20.0, 20.0], [20.0, 80.0], [20.0, 50.0], [50.0, 20.0], [50.0, 80.0], [80.0, 80.0], [80.0, 20.0], [80.0, 50.0]]
+    landmarks = [[0.0, 0.0], [100.0, 0.0], [200.0, 0.0], [0.0, 50.0], [200.0, 50.0], [0.0, 100.0], [100.0, 100.0], [200.0, 100.0]]
 
     for (x, y) in landmarks:
         world.set_landmarks(x, y)
 
     # create a robot
-    R = Robot(world.size_x, world.size_y, world.landmarks)
+    (x, y, orientation) = config['init']
+    location = random.choice(occupancy)
+    R = Robot(x, y, orientation, world.landmarks)
     # set robot noise
     R.set_noise(0.2, 0.1, 3.0)
-    # set robot position inside the world
-    R.set_states(40.0, 40.0, np.pi / 2)
 
-    # move the robot
-    R.motion(turn=-np.pi / 2, forward=10.0)
-
-    NUMBER_OF_PARTICLES = 1000
     p = []
+    NUMBER_OF_PARTICLES = 1000
     for i in range(NUMBER_OF_PARTICLES):
-        r = Robot(world.size_x, world.size_y, world.landmarks)
+        location = random.choice(occupancy)
+        r = Robot(location[0], location[1], random.random() * 2 * np.pi, world.landmarks)
         r.set_noise(0.2, 0.1, 3.0)
         p.append(r)
 
-    NUMBER_OF_ITERATIONS = 1000
-    for idx in range(1, NUMBER_OF_ITERATIONS):
-        R.motion(turn=0.1, forward=0.5)
+    for idx, (forward, turn) in enumerate(config['paths']):
+        R.motion(turn=turn, forward=forward)
         z = R.sense()
 
         # Simulate a robot motion for each of these particles
-        p_tmp = [None] * NUMBER_OF_PARTICLES
         for i in range(NUMBER_OF_PARTICLES):
-            p_tmp[i] = p[i].motion(turn=0.1, forward=0.5)
-            p[i] = p_tmp[i]
+            p[i].motion(turn=turn, forward=forward, noise=True)
 
         if idx % 1 == 0:
             # Generate particle weights depending on robot's measurement
@@ -54,6 +55,7 @@ if __name__ == "__main__":
             w = w / sum(w)
 
             # Resample the particles with a sample probability proportional to the importance weight
+            # Use low variance sampling method
             new_p = [None] * NUMBER_OF_PARTICLES
             J_inv = 1 / NUMBER_OF_PARTICLES
             r = random.random() * J_inv
@@ -65,7 +67,7 @@ if __name__ == "__main__":
                 while (U > c):
                     i += 1
                     c += w[i]
-                new_p[j] = p[i]
+                new_p[j] = copy.deepcopy(p[i])
 
             p = new_p
 
