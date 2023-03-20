@@ -1,5 +1,6 @@
 import numpy as np
 
+NUMBER_OF_PARTICLES = 200
 
 SCENCES = {
     'scene-1': {

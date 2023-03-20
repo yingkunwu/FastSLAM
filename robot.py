@@ -3,11 +3,10 @@ import numpy as np
 
 
 class Robot(object):
-    def __init__(self, x, y, orientation, landmarks, map_size):
+    def __init__(self, x, y, orientation, map_size):
         self.x = x
         self.y = y
         self.orientation = orientation
-        self.landmarks = landmarks
         self.map_size = map_size
 
         self.forward_noise = 0.0
@@ -35,10 +34,10 @@ class Robot(object):
         self.y = self.y + forward * np.sin(self.orientation)
 
     def sense(self, world_grid):
-        measurements = self.ray_casting(world_grid)
+        measurements, radar_list = self.ray_casting(world_grid)
         measurements = measurements + np.random.normal(0.0, self.sense_noise, self.num_sensors)
         
-        return measurements
+        return measurements, radar_list
     
     def build_radar_beams(self):
         radar_src = np.array([[self.x] * self.num_sensors, [self.y] * self.num_sensors])
@@ -60,24 +59,28 @@ class Robot(object):
         radar_src, radar_dest = self.build_radar_beams()
         r = np.linspace(radar_src, radar_dest, self.radar_length)
 
+        radar_list = np.zeros((self.radar_length, self.num_sensors, 2))
+        radar_list[0, :, :] = radar_src.T
+
         measurements = [self.radar_length] * self.num_sensors
-        for dr in r:
+        for j, dr in enumerate(r):
             dist = np.sqrt(np.sum(np.power(dr - radar_src, 2), axis=0))
 
             for i, (x, y) in enumerate(dr.T):
                 if not world_grid[int(y)][int(x)] and (dist[i] < measurements[i]):
                     measurements[i] = dist[i]
+                
+                if dist[i] < measurements[i]:
+                    radar_list[j][i] = [x, y]
+                elif j > 0:
+                    radar_list[j][i] = radar_list[j - 1][i]
 
-        return measurements
+        return measurements, radar_list
 
     def measurement_prob(self, measurement, world_grid):
         prob = 1.0
 
-        #for i, (x, y) in enumerate(self.landmarks):
-        #    dist = np.sqrt(np.power(x - self.x, 2) + np.power(y - self.y, 2))
-        #    prob *= self.get_gaussian_probability(dist, self.sense_noise, measurement[i])
-
-        dist = self.ray_casting(world_grid)
+        dist, _ = self.ray_casting(world_grid)
         for d, m in zip(dist, measurement):
             prob *= self.get_gaussian_probability(d, self.sense_noise, m)
         

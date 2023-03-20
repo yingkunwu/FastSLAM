@@ -5,13 +5,9 @@ class World(object):
     def __init__(self, size_x=0, size_y=0):
         self.size_x = size_x
         self.size_y = size_y
-        self.landmarks = []
         self.map = None
         self.grid = None
         self.occupancy = []
-
-    def set_landmarks(self, x, y):
-        self.landmarks.append([x, y])
 
     def read_map(self, filename):
         self.map = cv2.imread(filename)

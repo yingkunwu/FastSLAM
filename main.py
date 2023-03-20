@@ -5,7 +5,7 @@ import copy
 from world import World
 from robot import Robot
 from utils import *
-from config import SCENCES
+from config import *
 
 
 if __name__ == "__main__":
@@ -19,31 +19,24 @@ if __name__ == "__main__":
     world_grid = world.get_grid()
     map_size = world_grid.shape
 
-    # create landmarks positions
-    landmarks = [[0.0, 0.0], [100.0, 0.0], [200.0, 0.0], [0.0, 50.0], [200.0, 50.0], [0.0, 100.0], [100.0, 100.0], [200.0, 100.0]]
-
-    for (x, y) in landmarks:
-        world.set_landmarks(x, y)
-
     # create a robot
     (x, y, orientation) = config['init']
-    R = Robot(x, y, orientation, world.landmarks, map_size)
+    R = Robot(x, y, orientation, map_size)
     # set robot noise
     R.set_noise(0.2, 0.1, 3.0)
 
     # initialize particles
     p = []
-    NUMBER_OF_PARTICLES = 1000
     for i in range(NUMBER_OF_PARTICLES):
         location = random.choice(occupancy)
-        r = Robot(location[0], location[1], random.random() * 2 * np.pi, world.landmarks, map_size)
+        r = Robot(location[0], location[1], random.random() * 2 * np.pi, map_size)
         r.set_noise(0.2, 0.1, 3.0)
         p.append(r)
 
     # monte carlo localization
     for idx, (forward, turn) in enumerate(config['paths']):
         R.motion(turn=turn, forward=forward)
-        z = R.sense(world_grid)
+        z, radar_list = R.sense(world_grid)
 
         # Simulate a robot motion for each of these particles
         for i in range(NUMBER_OF_PARTICLES):
@@ -75,4 +68,4 @@ if __name__ == "__main__":
 
             p = new_p
 
-        visualize(R, p, world, idx)
+        visualize(R, p, world, radar_list, idx)
