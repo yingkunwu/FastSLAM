@@ -16,6 +16,9 @@ if __name__ == "__main__":
     world.read_map(config['map'])
     occupancy = world.get_occupancy()
 
+    world_grid = world.get_grid()
+    map_size = world_grid.shape
+
     # create landmarks positions
     landmarks = [[0.0, 0.0], [100.0, 0.0], [200.0, 0.0], [0.0, 50.0], [200.0, 50.0], [0.0, 100.0], [100.0, 100.0], [200.0, 100.0]]
 
@@ -24,22 +27,23 @@ if __name__ == "__main__":
 
     # create a robot
     (x, y, orientation) = config['init']
-    location = random.choice(occupancy)
-    R = Robot(x, y, orientation, world.landmarks)
+    R = Robot(x, y, orientation, world.landmarks, map_size)
     # set robot noise
     R.set_noise(0.2, 0.1, 3.0)
 
+    # initialize particles
     p = []
     NUMBER_OF_PARTICLES = 1000
     for i in range(NUMBER_OF_PARTICLES):
         location = random.choice(occupancy)
-        r = Robot(location[0], location[1], random.random() * 2 * np.pi, world.landmarks)
+        r = Robot(location[0], location[1], random.random() * 2 * np.pi, world.landmarks, map_size)
         r.set_noise(0.2, 0.1, 3.0)
         p.append(r)
 
+    # monte carlo localization
     for idx, (forward, turn) in enumerate(config['paths']):
         R.motion(turn=turn, forward=forward)
-        z = R.sense()
+        z = R.sense(world_grid)
 
         # Simulate a robot motion for each of these particles
         for i in range(NUMBER_OF_PARTICLES):
@@ -49,7 +53,7 @@ if __name__ == "__main__":
             # Generate particle weights depending on robot's measurement
             w = [0.0] * NUMBER_OF_PARTICLES
             for i in range(NUMBER_OF_PARTICLES):
-                w[i] = p[i].measurement_prob(z);
+                w[i] = p[i].measurement_prob(z, world_grid);
             
             # normalize
             w = w / sum(w)

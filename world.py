@@ -7,29 +7,33 @@ class World(object):
         self.size_y = size_y
         self.landmarks = []
         self.map = None
+        self.grid = None
         self.occupancy = []
 
     def set_landmarks(self, x, y):
         self.landmarks.append([x, y])
 
     def read_map(self, filename):
-        img = cv2.imread(filename)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        height, width, _ = img.shape
+        self.map = cv2.imread(filename)
+        self.map = cv2.cvtColor(self.map, cv2.COLOR_BGR2RGB)
+        height, width, _ = self.map.shape
         self.size_y, self.size_x = height, width
 
-        img = np.flip(img, 0)
+        self.map = np.flip(self.map, 0)
 
-        self.map = np.ones_like(img) * 255
+        self.grid = np.ones((height, width))
         for i in range(height):
             for j in range(width):
-                if (img[i][j] != [255, 255, 255]).any():
-                    self.map[i][j] = [0, 0, 0]
+                if (self.map[i][j] != [255, 255, 255]).any():
+                    self.grid[i][j] = 0
                 else:
                     self.occupancy.append([j, i])
 
     def get_map(self):
         return self.map
+    
+    def get_grid(self):
+        return self.grid
     
     def get_occupancy(self):
         return self.occupancy
