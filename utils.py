@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 
 
 # Bresenhams Line Generation Algorithm
+# ref: https://www.geeksforgeeks.org/bresenhams-line-generation-algorithm/
 def bresenham(x1, y1, x2, y2):
     x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
     dx = abs(x2 - x1)
@@ -60,7 +61,6 @@ def rotate(center, vector, R):
     return vector
 
 
-
 def visualize(robot, particles, best_particle, world, radar_list, true_path, estimated_path, step):
     plt.title("MCL, step " + str(step + 1))
     plt.xlim(0, world.size_x)
@@ -76,11 +76,11 @@ def visualize(robot, particles, best_particle, world, radar_list, true_path, est
         plt.plot(x, y, "yo", markersize=1)
 
     # draw tragectory
-    for (x, y) in true_path:
-        plt.plot(x, y, "bo", markersize=2)
-        
-    for (x, y) in estimated_path:
-        plt.plot(x, y, "go", markersize=2)
+    true_path = np.array(true_path)
+    estimated_path = np.array(estimated_path)
+    plt.plot(true_path[:, 0], true_path[:, 1], "b")
+    plt.plot(estimated_path[:, 0], estimated_path[:, 1], "g")
+
 
     # draw robot position
     plt.plot(robot.x, robot.y, "bo")

@@ -21,14 +21,14 @@ if __name__ == "__main__":
     (x, y, orientation) = config['init']
     R = Robot(x, y, orientation, world_grid.shape, world_grid)
     # set robot noise
-    R.set_noise(0.2, 0.1, 3.0)
+    R.set_noise(0.5, 0.25, 3.0)
 
     # initialize particles
     p = []
     for i in range(NUMBER_OF_PARTICLES):
         location = random.choice(occupancy)
         r = Robot(x, y, orientation, world_grid.shape)
-        r.set_noise(0.2, 0.1, 3.0)
+        r.set_noise(0.5, 0.25, 3.0)
         p.append(r)
 
     # store path
@@ -48,7 +48,7 @@ if __name__ == "__main__":
             # Generate particle weights depending on robot's measurement
             w = [0.0] * NUMBER_OF_PARTICLES
             for i in range(NUMBER_OF_PARTICLES):
-                w[i] = p[i].measurement_prob(z, world_grid);
+                w[i] = p[i].measurement_model(z, world_grid);
                 p[i].update_occupancy_grid(free_grid_offset, occupy_grid_offset)
             
             # normalize

@@ -4,12 +4,25 @@ import numpy as np
 from utils import *
 
 
+random.seed(0)
+np.random.rand(0)
+
+
 class Robot(object):
     def __init__(self, x, y, orientation, grid_size, grid=None):
+        # initialize robot pose
         self.x = x
         self.y = y
         self.orientation = orientation
+
+        # probability for updating occupancy map
+        self.prior_prob = 0.5
+        self.occupy_prob = 0.9
+        self.free_prob = 0.35
+
+        # initialize map occupancy probability
         self.grid_size = grid_size
+        self.grid = 1 - grid if grid is not None else np.ones(grid_size) * self.prior_prob
 
         # coefficient for measurement probability
         self.p_hit = 0.8
@@ -18,19 +31,12 @@ class Robot(object):
         self.p_rand = 0.05
         self.lambda_short = 0.15
 
-        # probability for updating occupancy map
-        self.prior_prob = 0.5
-        self.occupy_prob = 0.9
-        self.free_prob = 0.35
-        if grid is not None:
-            self.grid = 1 - grid
-        else:
-            self.grid = np.ones(grid_size) * self.prior_prob # initialize map occupancy probability
-
+        # motion noise for robot particals motion and sensing noise for robot measurement
         self.forward_noise = 0.0
         self.turn_noise = 0.0
         self.sense_noise = 0.0
 
+        # parameters for beam range sensor
         self.num_sensors = 11
         self.radar_theta = (np.arange(0, self.num_sensors) - self.num_sensors // 2) * (np.pi / self.num_sensors)
         self.radar_length = 50
@@ -89,20 +95,19 @@ class Robot(object):
 
         return radar_src.T, beams
     
-    def ray_casting(self, world_grid):
+    def ray_casting(self, world_grid=None):
         radar_src, beams = self.build_radar_beams()
 
         measurements = [self.radar_range] * self.num_sensors
-
         free_grid, occupy_grid = [], []
         for i, beam in enumerate(beams):
-            for b in beam:
-                dist = np.sqrt(np.sum(np.power(b - radar_src[i], 2), axis=0))
+            dist = np.sqrt(np.sum(np.power(beam - radar_src[i], 2), axis=1))
 
-                if self.grid[b[1]][b[0]] > 0.5 and dist < measurements[i]: # TODO 這個world_grid不能是已知
-                    measurements[i] = dist
+            for b, d in zip(beam, dist):
+                if self.grid[b[1]][b[0]] > 0.5 and d < measurements[i]: # TODO 這個world_grid不能是已知
+                    measurements[i] = d
 
-                if dist < measurements[i]:
+                if d < measurements[i]:
                     free_grid.append(b)
                 else:
                     occupy_grid.append(b)
@@ -110,48 +115,16 @@ class Robot(object):
 
         return measurements, free_grid, occupy_grid
 
-    def measurement_prob(self, measurement, world_grid):
-        dist, _, _ = self.ray_casting(world_grid)
-        prob = self.get_gaussian_probability(np.array(measurement), np.power(self.sense_noise, 2), np.array(dist))
-        prob = np.prod(prob)
+    def measurement_model(self, z_star, world_grid=None):
+        z, _, _ = self.ray_casting(world_grid)
+        z, z_star = np.array(z), np.array(z_star)
 
-        return prob
-    
-    def update_occupancy_grid(self, free_grid_offset, occupy_grid_offset):
-        # TODO 把旋轉角度也考慮進去
-        pose = np.array([self.x, self.y])
-        free_grid_tmp = free_grid_offset + pose
-        occupy_grid_tmp = occupy_grid_offset + pose
-        R, R_inv = create_rotation_matrix(self.orientation)
-        free_grid = rotate(pose, np.array(free_grid_tmp), R).astype(np.int32)
-        occupy_grid = rotate(pose, np.array(occupy_grid_tmp), R).astype(np.int32)
-
-        for (x, y) in free_grid:
-            if 0 < x < self.grid_size[1] and 0 < y < self.grid_size[0]:
-                inverse_prob = self.inverse_sensing_model(False)
-                l = self.prob2logodds(self.grid[y][x]) + self.prob2logodds(inverse_prob) - self.prob2logodds(self.prior_prob)
-                self.grid[y][x] = self.logodds2prob(l)
-
-        for (x, y) in occupy_grid:
-            if 0 < x < self.grid_size[1] and 0 < y < self.grid_size[0]:
-                inverse_prob = self.inverse_sensing_model(True)
-                l = self.prob2logodds(self.grid[y][x]) + self.prob2logodds(inverse_prob) - self.prob2logodds(self.prior_prob)
-                self.grid[y][x] = self.logodds2prob(l)
-
-    
-    def inverse_sensing_model(self, occupy):
-        if occupy:
-            return self.occupy_prob
-        else:
-            return self.free_prob
-
-    def get_gaussian_probability(self, mean, var, z):
         # probability of measuring correct range with local measurement noise
-        prob_hit = np.exp(-(np.power(z - mean, 2) / var / 2.0) / np.sqrt(2.0 * np.pi * var))
+        prob_hit = np.exp(-(np.power(z - z_star, 2) / np.power(self.sense_noise, 2) / 2.0) / np.sqrt(2.0 * np.pi * np.power(self.sense_noise, 2)))
 
         # probability of hitting unexpected objects
         prob_short = self.lambda_short * np.exp(-self.lambda_short * z)
-        prob_short[np.greater(prob_short, mean)] = 0
+        prob_short[np.greater(z, z_star)] = 0
 
         # probability of not hitting anything or failures
         prob_max = np.ones_like(z)
@@ -162,7 +135,42 @@ class Robot(object):
 
         # total probability (p_hit + p_shot + p_max + p_rand = 1)
         prob = self.p_hit * prob_hit + self.p_short * prob_short + self.p_max * prob_max + self.p_rand * prob_rand
+        prob = np.prod(prob)
+
         return prob
+    
+    def update_occupancy_grid(self, free_grid_offset, occupy_grid_offset):
+        # calculate map locaiton based on the current measurement and robot pose
+        pose = np.array([self.x, self.y])
+        free_grid_tmp = free_grid_offset + pose
+        occupy_grid_tmp = occupy_grid_offset + pose
+        R, R_inv = create_rotation_matrix(self.orientation)
+        free_grid = rotate(pose, np.array(free_grid_tmp), R).astype(np.int32)
+        occupy_grid = rotate(pose, np.array(occupy_grid_tmp), R).astype(np.int32)
+
+        # update occupancy grid
+        mask1 = np.logical_and(0 < free_grid[:, 0], free_grid[:, 0] < self.grid_size[1])
+        mask2 = np.logical_and(0 < free_grid[:, 1], free_grid[:, 1] < self.grid_size[0])
+        free_grid = free_grid[np.logical_and(mask1, mask2)]
+
+        inverse_prob = self.inverse_sensing_model(False)
+        l = self.prob2logodds(self.grid[free_grid[:, 1], free_grid[:, 0]]) + self.prob2logodds(inverse_prob) - self.prob2logodds(self.prior_prob)
+        self.grid[free_grid[:, 1], free_grid[:, 0]] = self.logodds2prob(l)
+
+        mask1 = np.logical_and(0 < occupy_grid[:, 0], occupy_grid[:, 0] < self.grid_size[1])
+        mask2 = np.logical_and(0 < occupy_grid[:, 1], occupy_grid[:, 1] < self.grid_size[0])
+        occupy_grid = occupy_grid[np.logical_and(mask1, mask2)]
+
+        inverse_prob = self.inverse_sensing_model(True)
+        l = self.prob2logodds(self.grid[occupy_grid[:, 1], occupy_grid[:, 0]]) + self.prob2logodds(inverse_prob) - self.prob2logodds(self.prior_prob)
+        self.grid[occupy_grid[:, 1], occupy_grid[:, 0]] = self.logodds2prob(l)
+
+    
+    def inverse_sensing_model(self, occupy):
+        if occupy:
+            return self.occupy_prob
+        else:
+            return self.free_prob
     
     @staticmethod
     def prob2logodds(prob):
