@@ -35,7 +35,7 @@ if __name__ == "__main__":
     true_path, estimated_path = [], []
 
     # monte carlo localization
-    for idx, (forward, turn) in enumerate(config['paths']):
+    for idx, (forward, turn) in enumerate(config['controls']):
         R.motion(turn=turn, forward=forward)
         true_path.append([R.x, R.y])
         z, free_grid, occupy_grid, free_grid_offset, occupy_grid_offset = R.sense(world_grid)
