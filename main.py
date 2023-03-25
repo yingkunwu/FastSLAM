@@ -27,13 +27,17 @@ if __name__ == "__main__":
     p = []
     for i in range(NUMBER_OF_PARTICLES):
         location = random.choice(occupancy)
-        r = Robot(location[0], location[1], random.random() * 2 * np.pi, world_grid.shape)
+        r = Robot(x, y, orientation, world_grid.shape)
         r.set_noise(0.2, 0.1, 3.0)
         p.append(r)
+
+    # store path
+    true_path, estimated_path = [], []
 
     # monte carlo localization
     for idx, (forward, turn) in enumerate(config['paths']):
         R.motion(turn=turn, forward=forward)
+        true_path.append([R.x, R.y])
         z, free_grid, occupy_grid, free_grid_offset, occupy_grid_offset = R.sense(world_grid)
 
         # Simulate a robot motion for each of these particles
@@ -53,6 +57,7 @@ if __name__ == "__main__":
             # select best particle
             best_id = np.argmax(w)
             best_particle = copy.deepcopy(p[best_id])
+            estimated_path.append([best_particle.x, best_particle.y])
 
             # Resample the particles with a sample probability proportional to the importance weight
             # Use low variance sampling method
@@ -71,4 +76,4 @@ if __name__ == "__main__":
 
             p = new_p
 
-        visualize(R, p, world, free_grid, idx, best_particle)
+        visualize(R, p, best_particle, world, free_grid, true_path, estimated_path, idx)

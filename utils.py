@@ -45,19 +45,42 @@ def bresenham(x1, y1, x2, y2):
     return loc
 
 
-def visualize(robot, particles, world, radar_list, step, best_particle):
+def create_rotation_matrix(theta):
+    R = np.array([
+        [np.cos(theta), -np.sin(theta)],
+        [np.sin(theta), np.cos(theta)]
+    ])
+    R_inv = np.linalg.inv(R)
+
+    return R, R_inv
+
+
+def rotate(center, vector, R):
+    vector = (vector - center) @ R.T + center
+    return vector
+
+
+
+def visualize(robot, particles, best_particle, world, radar_list, true_path, estimated_path, step):
     plt.title("MCL, step " + str(step + 1))
     plt.xlim(0, world.size_x)
     plt.ylim(0, world.size_y)
 
     # draw map
-    world_map = world.get_map()
+    #world_map = 1 - robot.grid
     world_map = 1 - best_particle.grid
     plt.imshow(world_map, cmap='gray')
 
     # draw radar beams
     for (x, y) in radar_list:
         plt.plot(x, y, "yo", markersize=1)
+
+    # draw tragectory
+    for (x, y) in true_path:
+        plt.plot(x, y, "bo", markersize=2)
+        
+    for (x, y) in estimated_path:
+        plt.plot(x, y, "go", markersize=2)
 
     # draw robot position
     plt.plot(robot.x, robot.y, "bo")
