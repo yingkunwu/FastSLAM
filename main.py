@@ -38,42 +38,42 @@ if __name__ == "__main__":
     for idx, (forward, turn) in enumerate(config['controls']):
         R.motion(turn=turn, forward=forward)
         true_path.append([R.x, R.y])
-        z, free_grid, occupy_grid, free_grid_offset, occupy_grid_offset = R.sense(world_grid)
+        z_star, free_grid, occupy_grid, free_grid_offset, occupy_grid_offset = R.sense(world_grid)
 
-        # Simulate a robot motion for each of these particles
+        w = [0.0] * NUMBER_OF_PARTICLES
         for i in range(NUMBER_OF_PARTICLES):
+            # Simulate a robot motion for each of these particles
             p[i].motion(turn=turn, forward=forward, noise=True)
 
-        if idx % 1 == 0:
-            # Generate particle weights depending on robot's measurement
-            w = [0.0] * NUMBER_OF_PARTICLES
-            for i in range(NUMBER_OF_PARTICLES):
-                w[i] = p[i].measurement_model(z, world_grid);
-                p[i].update_occupancy_grid(free_grid_offset, occupy_grid_offset)
-            
-            # normalize
-            w = w / sum(w)
+            # Calculate particle's weights depending on robot's measurement
+            w[i] = p[i].measurement_model(z_star, world_grid);
 
-            # select best particle
-            best_id = np.argmax(w)
-            best_particle = copy.deepcopy(p[best_id])
-            estimated_path.append([best_particle.x, best_particle.y])
+            # Update occupancy grid based on the true measurements
+            p[i].update_occupancy_grid(free_grid_offset, occupy_grid_offset)
+        
+        # normalize
+        w = w / sum(w)
 
-            # Resample the particles with a sample probability proportional to the importance weight
-            # Use low variance sampling method
-            new_p = [None] * NUMBER_OF_PARTICLES
-            J_inv = 1 / NUMBER_OF_PARTICLES
-            r = random.random() * J_inv
-            c = w[0]
+        # select best particle
+        best_id = np.argmax(w)
+        best_particle = copy.deepcopy(p[best_id])
+        estimated_path.append([best_particle.x, best_particle.y])
 
-            i = 0
-            for j in range(NUMBER_OF_PARTICLES):
-                U = r + j * J_inv
-                while (U > c):
-                    i += 1
-                    c += w[i]
-                new_p[j] = copy.deepcopy(p[i])
+        # Resample the particles with a sample probability proportional to the importance weight
+        # Use low variance sampling method
+        new_p = [None] * NUMBER_OF_PARTICLES
+        J_inv = 1 / NUMBER_OF_PARTICLES
+        r = random.random() * J_inv
+        c = w[0]
 
-            p = new_p
+        i = 0
+        for j in range(NUMBER_OF_PARTICLES):
+            U = r + j * J_inv
+            while (U > c):
+                i += 1
+                c += w[i]
+            new_p[j] = copy.deepcopy(p[i])
+
+        p = new_p
 
         visualize(R, p, best_particle, world, free_grid, true_path, estimated_path, idx)

@@ -62,7 +62,8 @@ def rotate(center, vector, R):
 
 
 def visualize(robot, particles, best_particle, world, radar_list, true_path, estimated_path, step):
-    plt.title("MCL, step " + str(step + 1))
+    plt.suptitle("Fast SLAM 1.0", y=0.9)
+    plt.title("number of particles:{}, step:{}".format(len(particles), step + 1))
     plt.xlim(0, world.size_x)
     plt.ylim(0, world.size_y)
 
