@@ -21,32 +21,36 @@ if __name__ == "__main__":
     (x, y, orientation) = config['init']
     R = Robot(x, y, orientation, world_grid.shape, world_grid)
     # set robot noise
-    R.set_noise(0.5, 0.25, 3.0)
+    R.set_noise(sense_noise=3.0)
+    prev_odo = curr_odo = R.get_state()
 
     # initialize particles
     p = []
     for i in range(NUMBER_OF_PARTICLES):
-        location = random.choice(occupancy)
         r = Robot(x, y, orientation, world_grid.shape)
-        r.set_noise(0.5, 0.25, 3.0)
+        r.set_noise(sense_noise=0)
         p.append(r)
+
+    # initial guess
+    estimated_R = copy.deepcopy(p[0])
 
     # store path
     true_path, estimated_path = [], []
 
     # monte carlo localization
     for idx, (forward, turn) in enumerate(config['controls']):
-        R.motion(turn=turn, forward=forward)
+        R.move(turn=turn, forward=forward)
+        curr_odo = R.get_state()
         true_path.append([R.x, R.y])
-        z_star, free_grid_star, occupy_grid_star = R.sense(noise=True)
+        z_star, free_grid_star, occupy_grid_star = R.sense()
         free_grid_offset_star, occupy_grid_offset_star = R.absolute2relative(free_grid_star, occupy_grid_star)
 
         w = [0.0] * NUMBER_OF_PARTICLES
         for i in range(NUMBER_OF_PARTICLES):
             # Simulate a robot motion for each of these particles
-            p[i].motion(turn=turn, forward=forward, noise=True)
+            p[i].motion_update(prev_odo, curr_odo)
 
-            z, free_grid, occupy_grid = p[i].sense()
+            z, free_grid, occupy_grid = p[i].sense(estimated_R.grid)
     
             # Calculate particle's weights depending on robot's measurement
             w[i] = p[i].measurement_model(z_star, z)
@@ -59,8 +63,8 @@ if __name__ == "__main__":
 
         # select best particle
         best_id = np.argmax(w)
-        best_particle = copy.deepcopy(p[best_id])
-        estimated_path.append([best_particle.x, best_particle.y])
+        estimated_R = copy.deepcopy(p[best_id])
+        estimated_path.append([estimated_R.x, estimated_R.y])
 
         # Resample the particles with a sample probability proportional to the importance weight
         # Use low variance sampling method
@@ -79,4 +83,6 @@ if __name__ == "__main__":
 
         p = new_p
 
-        visualize(R, p, best_particle, world, free_grid_star, true_path, estimated_path, idx)
+        prev_odo = curr_odo
+
+        visualize(R, p, estimated_R, world, free_grid_star, true_path, estimated_path, idx)

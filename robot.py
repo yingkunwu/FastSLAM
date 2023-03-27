@@ -24,16 +24,21 @@ class Robot(object):
         self.grid_size = grid_size
         self.grid = 1 - grid if grid is not None else np.ones(grid_size) * self.prior_prob
 
+        # coefficient for motion model
+        self.alpha1 = 0.005
+        self.alpha2 = 0.005
+        self.alpha3 = 0.01
+        self.alpha4 = 0.01
+
         # coefficient for measurement probability
         self.p_hit = 0.8
+        self.sigma_hit = 20
         self.p_short = 0.05
         self.p_max = 0.1
         self.p_rand = 0.05
         self.lambda_short = 0.15
 
         # motion noise for robot particals motion and sensing noise for robot measurement
-        self.forward_noise = 0.0
-        self.turn_noise = 0.0
         self.sense_noise = 0.0
 
         # parameters for beam range sensor
@@ -42,27 +47,39 @@ class Robot(object):
         self.radar_length = 50
         self.radar_range = 60
 
-    def set_noise(self, forward_noise, turn_noise, sense_noise):
-        self.forward_noise = forward_noise
-        self.turn_noise = turn_noise
+    def set_noise(self, sense_noise):
         self.sense_noise = sense_noise
 
-    def motion(self, turn, forward, noise=False):
-        self.orientation = self.orientation + turn
-        if noise:
-            self.orientation = self.orientation + random.gauss(0.0, self.turn_noise)
-        self.orientation = self.orientation - 2 * np.pi if self.orientation > np.pi else self.orientation
-        self.orientation = self.orientation + 2 * np.pi if self.orientation <= -np.pi else self.orientation
+    def get_state(self):
+        return (self.x, self.y, self.orientation)
 
-        if noise:
-            forward = forward + random.gauss(0.0, self.forward_noise)
+    def move(self, turn, forward):
+        self.orientation = self.orientation + turn
+        self.orientation = wrapAngle(self.orientation)
+
         self.x = self.x + forward * np.cos(self.orientation)
         self.y = self.y + forward * np.sin(self.orientation)
 
-    def sense(self, world_grid=None, noise=False):
+    def motion_update(self, prev_odo, curr_odo):
+        rot1 = np.arctan2(curr_odo[1] - prev_odo[1], curr_odo[0] - prev_odo[0]) - prev_odo[2]
+        rot1 = wrapAngle(rot1)
+        trans = np.sqrt((curr_odo[0] - prev_odo[0]) ** 2 + (curr_odo[1] - prev_odo[1]) ** 2)
+        rot2 = curr_odo[2] - prev_odo[2] - rot1
+        rot2 = wrapAngle(rot2)
+
+        rot1 = rot1 - np.random.normal(0, self.alpha1 * rot1 ** 2 + self.alpha2 * trans ** 2)
+        rot1 = wrapAngle(rot1)
+        trans = trans - np.random.normal(0, self.alpha3 * trans ** 2 + self.alpha4 * (rot1 ** 2 + rot2 ** 2))
+        rot2 = rot2 - np.random.normal(0, self.alpha1 * rot2 ** 2 + self.alpha2 * trans ** 2)
+        rot2 = wrapAngle(rot2)
+
+        self.x = self.x + trans * np.cos(self.orientation + rot1)
+        self.y = self.y + trans * np.sin(self.orientation + rot1)
+        self.orientation = self.orientation + rot1 + rot2
+
+    def sense(self, world_grid=None):
         measurements, free_grid, occupy_grid = self.ray_casting(world_grid)
-        if noise:
-            measurements = np.clip(measurements + np.random.normal(0.0, self.sense_noise, self.num_sensors), 0.0, self.radar_range)
+        measurements = np.clip(measurements + np.random.normal(0.0, self.sense_noise, self.num_sensors), 0.0, self.radar_range)
         
         return measurements, free_grid, occupy_grid
     
@@ -138,7 +155,7 @@ class Robot(object):
         z_star, z = np.array(z_star), np.array(z)
 
         # probability of measuring correct range with local measurement noise
-        prob_hit = np.exp(-(np.power(z - z_star, 2) / np.power(self.sense_noise, 2) / 2.0) / np.sqrt(2.0 * np.pi * np.power(self.sense_noise, 2)))
+        prob_hit = np.exp(-(np.power(z - z_star, 2) / np.power(self.sigma_hit, 2) / 2.0) / np.sqrt(2.0 * np.pi * np.power(self.sigma_hit, 2)))
 
         # probability of hitting unexpected objects
         prob_short = self.lambda_short * np.exp(-self.lambda_short * z)
@@ -166,16 +183,16 @@ class Robot(object):
         free_grid = free_grid[np.logical_and(mask1, mask2)]
 
         inverse_prob = self.inverse_sensing_model(False)
-        l = self.prob2logodds(self.grid[free_grid[:, 1], free_grid[:, 0]]) + self.prob2logodds(inverse_prob) - self.prob2logodds(self.prior_prob)
-        self.grid[free_grid[:, 1], free_grid[:, 0]] = self.logodds2prob(l)
+        l = prob2logodds(self.grid[free_grid[:, 1], free_grid[:, 0]]) + prob2logodds(inverse_prob) - prob2logodds(self.prior_prob)
+        self.grid[free_grid[:, 1], free_grid[:, 0]] = logodds2prob(l)
 
         mask1 = np.logical_and(0 < occupy_grid[:, 0], occupy_grid[:, 0] < self.grid_size[1])
         mask2 = np.logical_and(0 < occupy_grid[:, 1], occupy_grid[:, 1] < self.grid_size[0])
         occupy_grid = occupy_grid[np.logical_and(mask1, mask2)]
 
         inverse_prob = self.inverse_sensing_model(True)
-        l = self.prob2logodds(self.grid[occupy_grid[:, 1], occupy_grid[:, 0]]) + self.prob2logodds(inverse_prob) - self.prob2logodds(self.prior_prob)
-        self.grid[occupy_grid[:, 1], occupy_grid[:, 0]] = self.logodds2prob(l)
+        l = prob2logodds(self.grid[occupy_grid[:, 1], occupy_grid[:, 0]]) + prob2logodds(inverse_prob) - prob2logodds(self.prior_prob)
+        self.grid[occupy_grid[:, 1], occupy_grid[:, 0]] = logodds2prob(l)
 
     
     def inverse_sensing_model(self, occupy):
@@ -183,11 +200,3 @@ class Robot(object):
             return self.occupy_prob
         else:
             return self.free_prob
-    
-    @staticmethod
-    def prob2logodds(prob):
-        return np.log(prob / (1 - prob + 1e-15))
-    
-    @staticmethod
-    def logodds2prob(logodds):
-        return 1 - 1 / (1 + np.exp(logodds) + 1e-15)

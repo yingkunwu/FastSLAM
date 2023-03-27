@@ -46,6 +46,19 @@ def bresenham(x1, y1, x2, y2):
     return loc
 
 
+def wrapAngle(radian):
+    radian = radian - 2 * np.pi * np.floor((radian + np.pi) / (2 * np.pi))
+    return radian
+    
+
+def prob2logodds(prob):
+    return np.log(prob / (1 - prob + 1e-15))
+
+
+def logodds2prob(logodds):
+    return 1 - 1 / (1 + np.exp(logodds) + 1e-15)
+
+
 def create_rotation_matrix(theta):
     R = np.array([
         [np.cos(theta), -np.sin(theta)],
