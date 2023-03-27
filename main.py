@@ -38,18 +38,21 @@ if __name__ == "__main__":
     for idx, (forward, turn) in enumerate(config['controls']):
         R.motion(turn=turn, forward=forward)
         true_path.append([R.x, R.y])
-        z_star, free_grid, occupy_grid, free_grid_offset, occupy_grid_offset = R.sense(world_grid)
+        z_star, free_grid_star, occupy_grid_star = R.sense(noise=True)
+        free_grid_offset_star, occupy_grid_offset_star = R.absolute2relative(free_grid_star, occupy_grid_star)
 
         w = [0.0] * NUMBER_OF_PARTICLES
         for i in range(NUMBER_OF_PARTICLES):
             # Simulate a robot motion for each of these particles
             p[i].motion(turn=turn, forward=forward, noise=True)
 
+            z, free_grid, occupy_grid = p[i].sense()
+    
             # Calculate particle's weights depending on robot's measurement
-            w[i] = p[i].measurement_model(z_star, world_grid);
+            w[i] = p[i].measurement_model(z_star, z)
 
             # Update occupancy grid based on the true measurements
-            p[i].update_occupancy_grid(free_grid_offset, occupy_grid_offset)
+            p[i].update_occupancy_grid(free_grid_offset_star, occupy_grid_offset_star)
         
         # normalize
         w = w / sum(w)
@@ -76,4 +79,4 @@ if __name__ == "__main__":
 
         p = new_p
 
-        visualize(R, p, best_particle, world, free_grid, true_path, estimated_path, idx)
+        visualize(R, p, best_particle, world, free_grid_star, true_path, estimated_path, idx)

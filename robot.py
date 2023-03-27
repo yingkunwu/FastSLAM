@@ -59,10 +59,14 @@ class Robot(object):
         self.x = self.x + forward * np.cos(self.orientation)
         self.y = self.y + forward * np.sin(self.orientation)
 
-    def sense(self, world_grid):
+    def sense(self, world_grid=None, noise=False):
         measurements, free_grid, occupy_grid = self.ray_casting(world_grid)
-        measurements = np.clip(measurements + np.random.normal(0.0, self.sense_noise, self.num_sensors), 0.0, self.radar_range)
-
+        if noise:
+            measurements = np.clip(measurements + np.random.normal(0.0, self.sense_noise, self.num_sensors), 0.0, self.radar_range)
+        
+        return measurements, free_grid, occupy_grid
+    
+    def absolute2relative(self, free_grid, occupy_grid):
         # calculate map location relative to the robot pose
         pose = np.array([self.x, self.y])
         R, R_inv = create_rotation_matrix(self.orientation)
@@ -70,9 +74,20 @@ class Robot(object):
         occupy_grid_tmp = rotate(pose, np.array(occupy_grid), R_inv)
         free_grid_offset = free_grid_tmp - pose
         occupy_grid_offset = occupy_grid_tmp - pose
-        
-        return measurements, free_grid, occupy_grid, free_grid_offset, occupy_grid_offset
+
+        return free_grid_offset, occupy_grid_offset
     
+    def relative2absolute(self, free_grid_offset, occupy_grid_offset):
+        # calculate map locaiton based on the current measurement and robot pose
+        pose = np.array([self.x, self.y])
+        free_grid_tmp = free_grid_offset + pose
+        occupy_grid_tmp = occupy_grid_offset + pose
+        R, R_inv = create_rotation_matrix(self.orientation)
+        free_grid = rotate(pose, np.array(free_grid_tmp), R).astype(np.int32)
+        occupy_grid = rotate(pose, np.array(occupy_grid_tmp), R).astype(np.int32)
+
+        return free_grid, occupy_grid
+
     def build_radar_beams(self):
         radar_src = np.array([[self.x] * self.num_sensors, [self.y] * self.num_sensors])
         radar_theta = self.radar_theta + self.orientation
@@ -104,8 +119,12 @@ class Robot(object):
             dist = np.sqrt(np.sum(np.power(beam - radar_src[i], 2), axis=1))
 
             for b, d in zip(beam, dist):
-                if self.grid[b[1]][b[0]] > 0.5 and d < measurements[i]: # TODO 這個world_grid不能是已知
-                    measurements[i] = d
+                if world_grid is not None:
+                    if not world_grid[b[1]][b[0]] and d < measurements[i]:
+                        measurements[i] = d
+                else:
+                    if self.grid[b[1]][b[0]] > 0.5 and d < measurements[i]:
+                        measurements[i] = d
 
                 if d < measurements[i]:
                     free_grid.append(b)
@@ -115,9 +134,8 @@ class Robot(object):
 
         return measurements, free_grid, occupy_grid
 
-    def measurement_model(self, z_star, world_grid=None):
-        z, _, _ = self.ray_casting(world_grid)
-        z, z_star = np.array(z), np.array(z_star)
+    def measurement_model(self, z_star, z):
+        z_star, z = np.array(z_star), np.array(z)
 
         # probability of measuring correct range with local measurement noise
         prob_hit = np.exp(-(np.power(z - z_star, 2) / np.power(self.sense_noise, 2) / 2.0) / np.sqrt(2.0 * np.pi * np.power(self.sense_noise, 2)))
@@ -140,13 +158,7 @@ class Robot(object):
         return prob
     
     def update_occupancy_grid(self, free_grid_offset, occupy_grid_offset):
-        # calculate map locaiton based on the current measurement and robot pose
-        pose = np.array([self.x, self.y])
-        free_grid_tmp = free_grid_offset + pose
-        occupy_grid_tmp = occupy_grid_offset + pose
-        R, R_inv = create_rotation_matrix(self.orientation)
-        free_grid = rotate(pose, np.array(free_grid_tmp), R).astype(np.int32)
-        occupy_grid = rotate(pose, np.array(occupy_grid_tmp), R).astype(np.int32)
+        free_grid, occupy_grid = self.relative2absolute(free_grid_offset, occupy_grid_offset)
 
         # update occupancy grid
         mask1 = np.logical_and(0 < free_grid[:, 0], free_grid[:, 0] < self.grid_size[1])
