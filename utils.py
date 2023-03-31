@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from icp import icp_matching
+
 
 # Bresenhams Line Generation Algorithm
 # ref: https://www.geeksforgeeks.org/bresenhams-line-generation-algorithm/
@@ -46,41 +48,37 @@ def bresenham(x1, y1, x2, y2):
     return loc
 
 
-# Iterative Closest Point Algorithm
-# Ref: https://github.com/AtsushiSakai/PythonRobotics/blob/53eae53b5a78a08b7ce4c6ffeed727c1d6a0ab2e/SLAM/iterative_closest_point/iterative_closest_point.py
-def icp(prev_scan, curr_scan, pose):
-    prev_points, curr_points = [], []
-    for p_s, c_s in zip(prev_scan, curr_scan):
-        if p_s and c_s:
-            prev_points.append(p_s)
-            curr_points.append(c_s)
+def data_association(prev_points, curr_points, prev_idx, curr_idx):
+    assert len(prev_idx) == len(curr_idx)
 
-    if len(prev_points) == 0:
+    prev_points = np.array(prev_points)
+    curr_points = np.array(curr_points)
+
+    prev_points_matched, curr_points_matched = [], []
+    for i in range(len(prev_idx)):
+        min_range = min(len(prev_idx[i]), len(curr_idx[i]))
+        prev_points_matched.extend(prev_points[np.array(prev_idx[i])[:min_range]])
+        curr_points_matched.extend(curr_points[np.array(curr_idx[i])[:min_range]])
+
+    return np.array(prev_points_matched), np.array(curr_points_matched)
+
+
+def scan_matching(prev_points, curr_points, prev_idx, curr_idx, pose):
+    if len(prev_points) < 5 or len(curr_points) < 5:
+        return None
+
+    prev_points, curr_points = data_association(prev_points, curr_points, prev_idx, curr_idx)
+
+    R, t = icp_matching(prev_points.T, curr_points.T)
+
+    if t[0] > 5 or t[1] > 5:
         return None
     
-    prev_points = np.array(prev_points) - pose[:2]
-    curr_points = np.array(curr_points) - pose[:2]
-
-    prev_mean = np.mean(prev_points, axis=0)
-    curr_mean = np.mean(curr_points, axis=0)
-    
-    prev_shift = prev_points - prev_mean
-    curr_shift = curr_points - curr_mean
-
-    W = curr_shift.T @ prev_shift
-    u, s, vh = np.linalg.svd(W)
-
-    if np.sum(s == 0) > 0:
-        return None
-    
-    R = (u @ vh).T
-    t = curr_mean - (R @ prev_mean)
-
     x = pose[0] + t[0]
     y = pose[1] + t[1]
     orientation = wrapAngle(pose[2] + np.arctan2(R[1][0], R[0][0]))
 
-    return (x, y, orientation)
+    return np.array((x, y, orientation))
 
 
 def wrapAngle(radian):

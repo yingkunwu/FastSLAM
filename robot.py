@@ -23,6 +23,7 @@ class Robot(object):
         # initialize map occupancy probability
         self.grid_size = grid_size
         self.grid = 1 - grid if grid is not None else np.ones(grid_size) * self.prior_prob
+        self.prev_scan = None
 
         # probability weight
         self.w = 0
@@ -141,9 +142,11 @@ class Robot(object):
         measurements = [self.radar_range] * self.num_sensors
         free_grid, occupy_grid = [], []
         scan = [None] * self.num_sensors
+
+        j = 0
         for i, beam in enumerate(beams):
             dist = np.sqrt(np.sum(np.power(beam - radar_src[i], 2), axis=1))
-
+            temp = []
             for b, d in zip(beam, dist):
                 if world_grid is not None:
                     if world_grid[b[1]][b[0]] > 0.5 and d < measurements[i]:
@@ -154,12 +157,33 @@ class Robot(object):
 
                 if d < measurements[i]:
                     free_grid.append(b)
+                    temp.append(j)
+                    j += 1
                 else:
                     occupy_grid.append(b)
-                    scan[i] = b
                     break  # no need to iterate the rest if we hit an object
+            scan[i] = temp
 
         return measurements, free_grid, occupy_grid, scan
+    
+    def motion_model(self, prev_odo, curr_odo, curr_pose):
+        rot1 = np.arctan2(curr_odo[1] - prev_odo[1], curr_odo[0] - prev_odo[0]) - prev_odo[2]
+        rot1 = wrapAngle(rot1)
+        trans = np.sqrt((curr_odo[0] - prev_odo[0]) ** 2 + (curr_odo[1] - prev_odo[1]) ** 2)
+        rot2 = curr_odo[2] - prev_odo[2] - rot1
+        rot2 = wrapAngle(rot2)
+
+        rot1_prime = np.arctan2(curr_pose[1] - self.y, curr_pose[0] - self.x) - self.orientation
+        rot1_prime = wrapAngle(rot1_prime)
+        trans_prime = np.sqrt((curr_pose[0] - self.x) ** 2 + (curr_pose[1] - self.y) ** 2)
+        rot2_prime = curr_pose[2] - self.orientation - rot1_prime
+        rot2_prime = wrapAngle(rot2_prime)
+
+        p1 = normalDistribution(wrapAngle(rot1 - rot1_prime), self.alpha1 * rot1_prime ** 2 + self.alpha2 * trans_prime ** 2)
+        p2 = normalDistribution(trans - trans_prime, self.alpha3 * trans_prime ** 2 + self.alpha4 * (rot1_prime ** 2 + rot2_prime ** 2))
+        p3 = normalDistribution(wrapAngle(rot2 - rot2_prime), self.alpha1 * rot2_prime ** 2 + self.alpha2 * trans_prime ** 2)
+
+        return p1 * p2 * p3
 
     def measurement_model(self, z_star, z):
         z_star, z = np.array(z_star), np.array(z)
@@ -184,29 +208,7 @@ class Robot(object):
 
         return prob
     
-    def motion_model(self, prev_odo, curr_odo, curr_pose):
-        rot1 = np.arctan2(curr_odo[1] - prev_odo[1], curr_odo[0] - prev_odo[0]) - prev_odo[2]
-        rot1 = wrapAngle(rot1)
-        trans = np.sqrt((curr_odo[0] - prev_odo[0]) ** 2 + (curr_odo[1] - prev_odo[1]) ** 2)
-        rot2 = curr_odo[2] - prev_odo[2] - rot1
-        rot2 = wrapAngle(rot2)
-
-        rot1_prime = np.arctan2(curr_pose[1] - self.y, curr_pose[0] - self.x) - self.orientation
-        rot1_prime = wrapAngle(rot1_prime)
-        trans_prime = np.sqrt((curr_pose[0] - self.x) ** 2 + (curr_pose[1] - self.y) ** 2)
-        rot2_prime = curr_pose[2] - self.orientation - rot1_prime
-        rot2_prime = wrapAngle(rot2_prime)
-
-        p1 = normalDistribution(wrapAngle(rot1 - rot1_prime), self.alpha1 * rot1_prime ** 2 + self.alpha2 * trans_prime ** 2)
-        p2 = normalDistribution(trans - trans_prime, self.alpha3 * trans_prime ** 2 + self.alpha4 * (rot1_prime ** 2 + rot2_prime ** 2))
-        p3 = normalDistribution(wrapAngle(rot2 - rot2_prime), self.alpha1 * rot2_prime ** 2 + self.alpha2 * trans_prime ** 2)
-
-        return p1 * p2 * p3
-    
-    def update_occupancy_grid(self, free_grid_offset, occupy_grid_offset):
-        free_grid, occupy_grid = self.relative2absolute(free_grid_offset, occupy_grid_offset)
-
-        # update occupancy grid
+    def update_occupancy_grid(self, free_grid, occupy_grid):
         mask1 = np.logical_and(0 < free_grid[:, 0], free_grid[:, 0] < self.grid_size[1])
         mask2 = np.logical_and(0 < free_grid[:, 1], free_grid[:, 1] < self.grid_size[0])
         free_grid = free_grid[np.logical_and(mask1, mask2)]
@@ -222,7 +224,6 @@ class Robot(object):
         inverse_prob = self.inverse_sensing_model(True)
         l = prob2logodds(self.grid[occupy_grid[:, 1], occupy_grid[:, 0]]) + prob2logodds(inverse_prob) - prob2logodds(self.prior_prob)
         self.grid[occupy_grid[:, 1], occupy_grid[:, 0]] = logodds2prob(l)
-
     
     def inverse_sensing_model(self, occupy):
         if occupy:

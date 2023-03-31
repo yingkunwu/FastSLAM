@@ -33,8 +33,8 @@ if __name__ == "__main__":
 
     # initial estimate
     estimated_R = copy.deepcopy(p[0])
-    _, _, _, scan = estimated_R.sense()
-    prev_scan = curr_scan = scan
+    prev_scan = curr_scan = []
+    prev_idx = curr_idx = []
 
     # store path
     true_path, estimated_path = [], []
@@ -44,16 +44,22 @@ if __name__ == "__main__":
         R.move(turn=turn, forward=forward)
         curr_odo = R.get_state()
         true_path.append([R.x, R.y])
-        z_star, free_grid_star, occupy_grid_star, curr_scan = R.sense()
+
+        z_star, free_grid_star, occupy_grid_star, scan_star = R.sense()
+        curr_scan = free_grid_star
+        curr_idx = scan_star
+
         free_grid_offset_star, occupy_grid_offset_star = R.absolute2relative(free_grid_star, occupy_grid_star)
 
         total_weight = 0
         best_id, best_w = 0, 0
         for i in range(NUMBER_OF_PARTICLES):
             # Perform scan matching
-            _, _, _, prev_scan = p[i].sense(estimated_R.grid)
+            # _, free_grid, occupy_grid, scan = p[i].sense() // For simplicity I use ground truth map for scan matching
+
+            free_grid_prime, occupy_grid_prime = p[i].relative2absolute(free_grid_offset_star, occupy_grid_offset_star)
             pose = np.array(p[i].get_state())
-            pose_hat = icp(prev_scan, curr_scan, pose)
+            pose_hat = scan_matching(prev_scan, curr_scan, prev_idx, curr_idx, pose)
 
             # If the scan matching fails, the pose and the weights are computed according to the motion model
             if pose_hat is not None:
@@ -70,8 +76,7 @@ if __name__ == "__main__":
                     z, _, _, _ = tmp_r.sense(p[i].grid)
                     measurement_prob = p[i].measurement_model(z_star, z)
 
-                    prob = motion_prob * measurement_prob
-                    likelihoods[j] = prob
+                    likelihoods[j] = motion_prob * measurement_prob
 
                 eta = np.sum(likelihoods)
 
@@ -107,34 +112,42 @@ if __name__ == "__main__":
                 best_id = i
 
             # Update occupancy grid based on the true measurements
-            p[i].update_occupancy_grid(free_grid_offset_star, occupy_grid_offset_star)
+            free_grid, occupy_grid = p[i].relative2absolute(free_grid_offset_star, occupy_grid_offset_star)
+            p[i].update_occupancy_grid(free_grid, occupy_grid)
 
         # normalize
+        N_eff = 0
         for i in range(NUMBER_OF_PARTICLES):
             p[i].w /= total_weight
+            N_eff += p[i].w ** 2
+        N_eff = 1 / N_eff
 
         # select best particle
         estimated_R = copy.deepcopy(p[best_id])
         estimated_path.append([estimated_R.x, estimated_R.y])
 
-        # Resample the particles with a sample probability proportional to the importance weight
-        # Use low variance sampling method
-        new_p = [None] * NUMBER_OF_PARTICLES
-        J_inv = 1 / NUMBER_OF_PARTICLES
-        r = random.random() * J_inv
-        c = p[0].w
+        # adaptive resampling
+        if N_eff < NUMBER_OF_PARTICLES / 2:
+            print("Resample!")
+            # Resample the particles with a sample probability proportional to the importance weight
+            # Use low variance sampling method
+            new_p = [None] * NUMBER_OF_PARTICLES
+            J_inv = 1 / NUMBER_OF_PARTICLES
+            r = random.random() * J_inv
+            c = p[0].w
 
-        i = 0
-        for j in range(NUMBER_OF_PARTICLES):
-            U = r + j * J_inv
-            while (U > c):
-                i += 1
-                c += p[i].w
-            new_p[j] = copy.deepcopy(p[i])
+            i = 0
+            for j in range(NUMBER_OF_PARTICLES):
+                U = r + j * J_inv
+                while (U > c):
+                    i += 1
+                    c += p[i].w
+                new_p[j] = copy.deepcopy(p[i])
 
-        p = new_p
+            p = new_p
 
         prev_odo = curr_odo
         prev_scan = curr_scan
+        prev_idx = curr_idx
 
         visualize(R, p, estimated_R, world, free_grid_star, true_path, estimated_path, idx)
