@@ -47,10 +47,10 @@ class Robot(object):
         self.sense_noise = sense_noise if sense_noise is not None else 0.0
 
         # parameters for beam range sensor
-        self.num_sensors = 11
-        self.radar_theta = (np.arange(0, self.num_sensors) - self.num_sensors // 2) * (np.pi / self.num_sensors)
-        self.radar_length = 50
-        self.radar_range = 60
+        self.num_sensors = 15
+        self.radar_theta = (np.arange(0, self.num_sensors)) * (2 * np.pi / self.num_sensors)
+        self.radar_length = 100
+        self.radar_range = 120
 
     def set_states(self, x, y, theta):
         self.x = x
@@ -86,6 +86,25 @@ class Robot(object):
         self.x = self.x + trans * np.cos(self.theta + rot1)
         self.y = self.y + trans * np.sin(self.theta + rot1)
         self.theta = self.theta + rot1 + rot2
+
+    def motion_sample(self, prev_odo, curr_odo):
+        rot1 = np.arctan2(curr_odo[1] - prev_odo[1], curr_odo[0] - prev_odo[0]) - prev_odo[2]
+        rot1 = wrapAngle(rot1)
+        trans = np.sqrt((curr_odo[0] - prev_odo[0]) ** 2 + (curr_odo[1] - prev_odo[1]) ** 2)
+        rot2 = curr_odo[2] - prev_odo[2] - rot1
+        rot2 = wrapAngle(rot2)
+
+        rot1 = rot1 - np.random.normal(0, self.alpha1 * rot1 ** 2 + self.alpha2 * trans ** 2)
+        rot1 = wrapAngle(rot1)
+        trans = trans - np.random.normal(0, self.alpha3 * trans ** 2 + self.alpha4 * (rot1 ** 2 + rot2 ** 2))
+        rot2 = rot2 - np.random.normal(0, self.alpha1 * rot2 ** 2 + self.alpha2 * trans ** 2)
+        rot2 = wrapAngle(rot2)
+
+        x = self.x + trans * np.cos(self.theta + rot1)
+        y = self.y + trans * np.sin(self.theta + rot1)
+        theta = self.theta + rot1 + rot2
+
+        return (x, y, theta)
 
     def sense(self, world_grid=None):
         measurements, free_grid, occupy_grid, scan = self.ray_casting(world_grid)
@@ -179,7 +198,7 @@ class Robot(object):
         trans_prime = np.sqrt((curr_pose[0] - self.x) ** 2 + (curr_pose[1] - self.y) ** 2)
         rot2_prime = curr_pose[2] - self.theta - rot1_prime
         rot2_prime = wrapAngle(rot2_prime)
-
+        
         p1 = normalDistribution(wrapAngle(rot1 - rot1_prime), self.alpha1 * rot1_prime ** 2 + self.alpha2 * trans_prime ** 2)
         p2 = normalDistribution(trans - trans_prime, self.alpha3 * trans_prime ** 2 + self.alpha4 * (rot1_prime ** 2 + rot2_prime ** 2))
         p3 = normalDistribution(wrapAngle(rot2 - rot2_prime), self.alpha1 * rot2_prime ** 2 + self.alpha2 * trans_prime ** 2)
