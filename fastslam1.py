@@ -21,12 +21,14 @@ if __name__ == "__main__":
     R = Robot(x, y, theta, world_grid.shape, world_grid, sense_noise=3.0)
     prev_odo = curr_odo = R.get_state()
 
-    offset = [config['grid_size'][0] / 2 - x, config['grid_size'][1] / 2 - y]
+    p_x = config['grid_size'][0] / 2
+    p_y = config['grid_size'][1] / 2
+    offset = [p_x - x, p_y - y]
 
     # initialize particles
     p = []
     for i in range(NUMBER_OF_PARTICLES):
-        r = Robot(config['grid_size'][0] / 2, config['grid_size'][1] / 2, theta, config['grid_size'])
+        r = Robot(p_x, p_y, theta, config['grid_size'])
         r.w = 1 / NUMBER_OF_PARTICLES
         p.append(r)
 

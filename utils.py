@@ -117,8 +117,8 @@ def visualize(robot, particles, best_particle, world, radar_list, step, offset):
     plt.suptitle("Fast SLAM 1.0", y=0.9)
     plt.title("number of particles:{}, step:{}".format(len(particles), step + 1))
     grid_size = best_particle.grid_size
-    plt.xlim(0, grid_size[0])
-    plt.ylim(0, grid_size[1])
+    plt.xlim(0, grid_size[1])
+    plt.ylim(0, grid_size[0])
 
     # draw map
     #world_map = 1 - robot.grid
