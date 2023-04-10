@@ -1,13 +1,14 @@
 import numpy as np
 
-NUMBER_OF_PARTICLES = 40
+NUMBER_OF_PARTICLES = 100
 
 NUMBER_OF_MODE_SAMPLES = 50
-mode_sample_cov = np.diag([0.5, 0.5, 0.01])
+mode_sample_cov = np.diag([0.2, 0.2, 0.01])
 
 SCENCES = {
     'scene-1': {
         'map': 'map/scene1.png',
+        'grid_size':(300, 300),
         'init': [175, 70, -np.pi/2],
         'controls': [
             [2, 0],

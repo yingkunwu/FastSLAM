@@ -113,11 +113,12 @@ def rotate(center, vector, R):
     return vector
 
 
-def visualize(robot, particles, best_particle, world, radar_list, true_path, estimated_path, step):
+def visualize(robot, particles, best_particle, world, radar_list, step, offset):
     plt.suptitle("Fast SLAM 1.0", y=0.9)
     plt.title("number of particles:{}, step:{}".format(len(particles), step + 1))
-    plt.xlim(0, world.size_x)
-    plt.ylim(0, world.size_y)
+    grid_size = best_particle.grid_size
+    plt.xlim(0, grid_size[0])
+    plt.ylim(0, grid_size[1])
 
     # draw map
     #world_map = 1 - robot.grid
@@ -126,17 +127,16 @@ def visualize(robot, particles, best_particle, world, radar_list, true_path, est
 
     # draw radar beams
     for (x, y) in radar_list:
-        plt.plot(x, y, "yo", markersize=1)
+        plt.plot(x + offset[0], y + offset[1], "yo", markersize=1)
 
     # draw tragectory
-    true_path = np.array(true_path)
-    estimated_path = np.array(estimated_path)
-    plt.plot(true_path[:, 0], true_path[:, 1], "b")
+    true_path = np.array(robot.trajectory)
+    estimated_path = np.array(best_particle.trajectory)
+    plt.plot(true_path[:, 0] + offset[0], true_path[:, 1] + offset[1], "b")
     plt.plot(estimated_path[:, 0], estimated_path[:, 1], "g")
 
-
     # draw robot position
-    plt.plot(robot.x, robot.y, "bo")
+    plt.plot(robot.x + offset[0], robot.y + offset[1], "bo")
 
     # draw particles position
     for p in particles:

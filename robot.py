@@ -9,11 +9,12 @@ np.random.rand(12)
 
 
 class Robot(object):
-    def __init__(self, x, y, orientation, grid_size, grid=None):
+    def __init__(self, x, y, theta, grid_size, grid=None, sense_noise=None):
         # initialize robot pose
         self.x = x
         self.y = y
-        self.orientation = orientation
+        self.theta = theta
+        self.trajectory = []
 
         # probability for updating occupancy map
         self.prior_prob = 0.5
@@ -43,7 +44,7 @@ class Robot(object):
         self.lambda_short = 0.15
 
         # motion noise for robot particals motion and sensing noise for robot measurement
-        self.sense_noise = 0.0
+        self.sense_noise = sense_noise if sense_noise is not None else 0.0
 
         # parameters for beam range sensor
         self.num_sensors = 11
@@ -51,23 +52,23 @@ class Robot(object):
         self.radar_length = 50
         self.radar_range = 60
 
-    def set_states(self, x, y, orientation):
+    def set_states(self, x, y, theta):
         self.x = x
         self.y = y
-        self.orientation = orientation
-
-    def set_noise(self, sense_noise):
-        self.sense_noise = sense_noise
+        self.theta = theta
 
     def get_state(self):
-        return (self.x, self.y, self.orientation)
+        return (self.x, self.y, self.theta)
+    
+    def update_trajectory(self):
+        self.trajectory.append([self.x, self.y])
 
     def move(self, turn, forward):
-        self.orientation = self.orientation + turn
-        self.orientation = wrapAngle(self.orientation)
+        self.theta = self.theta + turn
+        self.theta = wrapAngle(self.theta)
 
-        self.x = self.x + forward * np.cos(self.orientation)
-        self.y = self.y + forward * np.sin(self.orientation)
+        self.x = self.x + forward * np.cos(self.theta)
+        self.y = self.y + forward * np.sin(self.theta)
 
     def motion_update(self, prev_odo, curr_odo):
         rot1 = np.arctan2(curr_odo[1] - prev_odo[1], curr_odo[0] - prev_odo[0]) - prev_odo[2]
@@ -82,9 +83,9 @@ class Robot(object):
         rot2 = rot2 - np.random.normal(0, self.alpha1 * rot2 ** 2 + self.alpha2 * trans ** 2)
         rot2 = wrapAngle(rot2)
 
-        self.x = self.x + trans * np.cos(self.orientation + rot1)
-        self.y = self.y + trans * np.sin(self.orientation + rot1)
-        self.orientation = self.orientation + rot1 + rot2
+        self.x = self.x + trans * np.cos(self.theta + rot1)
+        self.y = self.y + trans * np.sin(self.theta + rot1)
+        self.theta = self.theta + rot1 + rot2
 
     def sense(self, world_grid=None):
         measurements, free_grid, occupy_grid, scan = self.ray_casting(world_grid)
@@ -95,7 +96,7 @@ class Robot(object):
     def absolute2relative(self, free_grid, occupy_grid):
         # calculate map location relative to the robot pose
         pose = np.array([self.x, self.y])
-        R, R_inv = create_rotation_matrix(self.orientation)
+        R, R_inv = create_rotation_matrix(self.theta)
         free_grid_tmp = rotate(pose, np.array(free_grid), R_inv)
         occupy_grid_tmp = rotate(pose, np.array(occupy_grid), R_inv)
         free_grid_offset = free_grid_tmp - pose
@@ -108,7 +109,7 @@ class Robot(object):
         pose = np.array([self.x, self.y])
         free_grid_tmp = free_grid_offset + pose
         occupy_grid_tmp = occupy_grid_offset + pose
-        R, R_inv = create_rotation_matrix(self.orientation)
+        R, R_inv = create_rotation_matrix(self.theta)
         free_grid = rotate(pose, np.array(free_grid_tmp), R).astype(np.int32)
         occupy_grid = rotate(pose, np.array(occupy_grid_tmp), R).astype(np.int32)
 
@@ -116,7 +117,7 @@ class Robot(object):
 
     def build_radar_beams(self):
         radar_src = np.array([[self.x] * self.num_sensors, [self.y] * self.num_sensors])
-        radar_theta = self.radar_theta + self.orientation
+        radar_theta = self.radar_theta + self.theta
         radar_rel_dest = np.stack(
             (
                 np.cos(radar_theta) * self.radar_length,
@@ -173,10 +174,10 @@ class Robot(object):
         rot2 = curr_odo[2] - prev_odo[2] - rot1
         rot2 = wrapAngle(rot2)
 
-        rot1_prime = np.arctan2(curr_pose[1] - self.y, curr_pose[0] - self.x) - self.orientation
+        rot1_prime = np.arctan2(curr_pose[1] - self.y, curr_pose[0] - self.x) - self.theta
         rot1_prime = wrapAngle(rot1_prime)
         trans_prime = np.sqrt((curr_pose[0] - self.x) ** 2 + (curr_pose[1] - self.y) ** 2)
-        rot2_prime = curr_pose[2] - self.orientation - rot1_prime
+        rot2_prime = curr_pose[2] - self.theta - rot1_prime
         rot2_prime = wrapAngle(rot2_prime)
 
         p1 = normalDistribution(wrapAngle(rot1 - rot1_prime), self.alpha1 * rot1_prime ** 2 + self.alpha2 * trans_prime ** 2)
