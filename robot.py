@@ -4,12 +4,12 @@ import numpy as np
 from utils import *
 
 
-random.seed(12)
-np.random.rand(12)
+random.seed(10)
+np.random.rand(10)
 
 
 class Robot(object):
-    def __init__(self, x, y, theta, grid_size, grid=None, sense_noise=None):
+    def __init__(self, x, y, theta, config, grid=None, sense_noise=None):
         # initialize robot pose
         self.x = x
         self.y = y
@@ -17,40 +17,40 @@ class Robot(object):
         self.trajectory = []
 
         # probability for updating occupancy map
-        self.prior_prob = 0.5
-        self.occupy_prob = 0.9
-        self.free_prob = 0.35
+        self.prior_prob = config['prior_prob']
+        self.occupy_prob = config['occupy_prob']
+        self.free_prob = config['free_prob']
 
         # initialize map occupancy probability
-        self.grid_size = grid_size
-        self.grid = 1 - grid if grid is not None else np.ones(grid_size) * self.prior_prob
-        self.prev_scan = None
+        if grid is not None:
+            self.grid = 1 - grid
+            self.grid_size = self.grid.shape
+        else:
+            self.grid_size = config['grid_size']
+            self.grid = np.ones(self.grid_size) * self.prior_prob
 
-        # probability weight
-        self.w = 0
-
-        # coefficient for motion model
-        self.alpha1 = 0.005
-        self.alpha2 = 0.005
-        self.alpha3 = 0.01
-        self.alpha4 = 0.01
-
-        # coefficient for measurement probability
-        self.p_hit = 0.8
-        self.sigma_hit = 20
-        self.p_short = 0.05
-        self.p_max = 0.1
-        self.p_rand = 0.05
-        self.lambda_short = 0.15
-
-        # motion noise for robot particals motion and sensing noise for robot measurement
+        # sensing noise for trun robot measurement
         self.sense_noise = sense_noise if sense_noise is not None else 0.0
 
+        # coefficient for motion model
+        self.alpha1 = config['alpha1']
+        self.alpha2 = config['alpha2']
+        self.alpha3 = config['alpha3']
+        self.alpha4 = config['alpha4']
+
+        # coefficient for measurement probability
+        self.p_hit = config['p_hit']
+        self.sigma_hit = config['sigma_hit']
+        self.p_short = config['p_short']
+        self.p_max = config['p_max']
+        self.p_rand = config['p_rand']
+        self.lambda_short = config['lambda_short']
+
         # parameters for beam range sensor
-        self.num_sensors = 15
+        self.num_sensors = config['num_sensors']
         self.radar_theta = (np.arange(0, self.num_sensors)) * (2 * np.pi / self.num_sensors)
-        self.radar_length = 100
-        self.radar_range = 120
+        self.radar_length = config['radar_length']
+        self.radar_range = config['radar_range']
 
     def set_states(self, x, y, theta):
         self.x = x
@@ -70,24 +70,7 @@ class Robot(object):
         self.x = self.x + forward * np.cos(self.theta)
         self.y = self.y + forward * np.sin(self.theta)
 
-    def motion_update(self, prev_odo, curr_odo):
-        rot1 = np.arctan2(curr_odo[1] - prev_odo[1], curr_odo[0] - prev_odo[0]) - prev_odo[2]
-        rot1 = wrapAngle(rot1)
-        trans = np.sqrt((curr_odo[0] - prev_odo[0]) ** 2 + (curr_odo[1] - prev_odo[1]) ** 2)
-        rot2 = curr_odo[2] - prev_odo[2] - rot1
-        rot2 = wrapAngle(rot2)
-
-        rot1 = rot1 - np.random.normal(0, self.alpha1 * rot1 ** 2 + self.alpha2 * trans ** 2)
-        rot1 = wrapAngle(rot1)
-        trans = trans - np.random.normal(0, self.alpha3 * trans ** 2 + self.alpha4 * (rot1 ** 2 + rot2 ** 2))
-        rot2 = rot2 - np.random.normal(0, self.alpha1 * rot2 ** 2 + self.alpha2 * trans ** 2)
-        rot2 = wrapAngle(rot2)
-
-        self.x = self.x + trans * np.cos(self.theta + rot1)
-        self.y = self.y + trans * np.sin(self.theta + rot1)
-        self.theta = self.theta + rot1 + rot2
-
-    def motion_sample(self, prev_odo, curr_odo):
+    def sample_motion_model(self, prev_odo, curr_odo):
         rot1 = np.arctan2(curr_odo[1] - prev_odo[1], curr_odo[0] - prev_odo[0]) - prev_odo[2]
         rot1 = wrapAngle(rot1)
         trans = np.sqrt((curr_odo[0] - prev_odo[0]) ** 2 + (curr_odo[1] - prev_odo[1]) ** 2)
@@ -107,32 +90,10 @@ class Robot(object):
         return (x, y, theta)
 
     def sense(self, world_grid=None):
-        measurements, free_grid, occupy_grid, scan = self.ray_casting(world_grid)
+        measurements, free_grid, occupy_grid = self.ray_casting(world_grid)
         measurements = np.clip(measurements + np.random.normal(0.0, self.sense_noise, self.num_sensors), 0.0, self.radar_range)
         
-        return measurements, free_grid, occupy_grid, scan
-    
-    def absolute2relative(self, free_grid, occupy_grid):
-        # calculate map location relative to the robot pose
-        pose = np.array([self.x, self.y])
-        R, R_inv = create_rotation_matrix(self.theta)
-        free_grid_tmp = rotate(pose, np.array(free_grid), R_inv)
-        occupy_grid_tmp = rotate(pose, np.array(occupy_grid), R_inv)
-        free_grid_offset = free_grid_tmp - pose
-        occupy_grid_offset = occupy_grid_tmp - pose
-
-        return free_grid_offset, occupy_grid_offset
-    
-    def relative2absolute(self, free_grid_offset, occupy_grid_offset):
-        # calculate map locaiton based on the current measurement and robot pose
-        pose = np.array([self.x, self.y])
-        free_grid_tmp = free_grid_offset + pose
-        occupy_grid_tmp = occupy_grid_offset + pose
-        R, R_inv = create_rotation_matrix(self.theta)
-        free_grid = rotate(pose, np.array(free_grid_tmp), R).astype(np.int32)
-        occupy_grid = rotate(pose, np.array(occupy_grid_tmp), R).astype(np.int32)
-
-        return free_grid, occupy_grid
+        return measurements, free_grid, occupy_grid
 
     def build_radar_beams(self):
         radar_src = np.array([[self.x] * self.num_sensors, [self.y] * self.num_sensors])
@@ -154,37 +115,29 @@ class Robot(object):
             x2, y2 = radar_dest[:, i]
             beams[i] = bresenham(x1, y1, x2, y2)
 
-        return radar_src.T, beams
+        return beams
     
     def ray_casting(self, world_grid=None):
-        radar_src, beams = self.build_radar_beams()
+        beams = self.build_radar_beams()
 
+        loc = np.array([self.x, self.y])
         measurements = [self.radar_range] * self.num_sensors
         free_grid, occupy_grid = [], []
-        scan = [None] * self.num_sensors
 
-        j = 0
         for i, beam in enumerate(beams):
-            dist = np.sqrt(np.sum(np.power(beam - radar_src[i], 2), axis=1))
-            temp = []
-            for b, d in zip(beam, dist):
-                if world_grid is not None:
-                    if world_grid[b[1]][b[0]] > 0.5 and d < measurements[i]:
-                        measurements[i] = d
-                else:
-                    if self.grid[b[1]][b[0]] > 0.5 and d < measurements[i]:
-                        measurements[i] = d
+            dist = np.linalg.norm(beam - loc, axis=1)
+            beam = np.array(beam)
 
-                if d < measurements[i]:
-                    free_grid.append(b)
-                    temp.append(j)
-                    j += 1
-                else:
-                    occupy_grid.append(b)
-                    break  # no need to iterate the rest if we hit an object
-            scan[i] = temp
+            obstacle_position = np.where(self.grid[beam[:, 1], beam[:, 0]] > 0.5)[0]
+            if len(obstacle_position) > 0:
+                idx = obstacle_position[0]
+                occupy_grid.append(list(beam[idx]))
+                free_grid.extend(list(beam[:idx]))
+                measurements[i] = dist[idx]
+            else:
+                free_grid.extend(list(beam))
 
-        return measurements, free_grid, occupy_grid, scan
+        return measurements, free_grid, occupy_grid
     
     def motion_model(self, prev_odo, curr_odo, curr_pose):
         rot1 = np.arctan2(curr_odo[1] - prev_odo[1], curr_odo[0] - prev_odo[0]) - prev_odo[2]
@@ -216,8 +169,8 @@ class Robot(object):
         prob_short[np.greater(z, z_star)] = 0
 
         # probability of not hitting anything or failures
-        prob_max = np.ones_like(z)
-        prob_max[z == self.radar_range] = 0
+        prob_max = np.zeros_like(z)
+        prob_max[z == self.radar_range] = 1
 
         # probability of random measurements
         prob_rand = 1 / self.radar_range

@@ -1,8 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from icp import icp_matching
-
 
 # Bresenhams Line Generation Algorithm
 # ref: https://www.geeksforgeeks.org/bresenhams-line-generation-algorithm/
@@ -48,38 +46,6 @@ def bresenham(x1, y1, x2, y2):
     return loc
 
 
-def data_association(prev_points, curr_points):
-    prev_points = np.array(prev_points)
-    curr_points = np.array(curr_points)
-
-    prev_points_matched, curr_points_matched = [], []
-    for i in range(len(curr_points)):
-        diff = np.sum(np.power(curr_points[i] - prev_points, 2), axis=1)
-        minIdx = np.argmin(diff)
-        prev_points_matched.append(prev_points[minIdx])
-        curr_points_matched.append(curr_points[i])
-
-    return np.array(prev_points_matched), np.array(curr_points_matched)
-
-
-def scan_matching(prev_points, curr_points, pose):
-    if len(prev_points) < 5 or len(curr_points) < 5:
-        return None
-
-    prev_points, curr_points = data_association(prev_points, curr_points)
-
-    R, t = icp_matching(prev_points.T, curr_points.T)
-
-    if abs(t[0]) > 5 or abs(t[1]) > 5:
-        return None
-    print(t, np.arctan2(R[1][0], R[0][0]))
-    x = pose[0] + t[0]
-    y = pose[1] + t[1]
-    orientation = wrapAngle(pose[2] + np.arctan2(R[1][0], R[0][0]))
-
-    return np.array((x, y, orientation))
-
-
 def wrapAngle(radian):
     radian = radian - 2 * np.pi * np.floor((radian + np.pi) / (2 * np.pi))
     return radian
@@ -111,16 +77,39 @@ def rotate(center, vector, R):
     vector = (vector - center) @ R.T + center
     return vector
 
+def absolute2relative(position, states):
+    x, y, theta = states
+    pose = np.array([x, y])
 
-def visualize(robot, particles, best_particle, world, radar_list, step, offset):
-    plt.suptitle("Fast SLAM 1.0", y=0.9)
+    R, R_inv = create_rotation_matrix(theta)
+    position = position - pose
+    position = np.array(position) @ R_inv.T
+
+    return position
+
+def relative2absolute(position, states):
+    x, y, theta = states
+    pose = np.array([x, y])
+
+    R, R_inv = create_rotation_matrix(theta)
+    position = np.array(position) @ R.T
+    position = position + pose
+
+    return position
+
+
+def visualize(robot, particles, best_particle, radar_list, config, step):
+    plt.suptitle("Fast SLAM 1.0")
     plt.title("number of particles:{}, step:{}".format(len(particles), step + 1))
     grid_size = best_particle.grid_size
     plt.xlim(0, grid_size[1])
     plt.ylim(0, grid_size[0])
 
+    Rx, Ry, _ = config['R_init']
+    px, py, _ = config['p_init']
+    offset = [px - Rx, py - Ry]
+
     # draw map
-    #world_map = 1 - robot.grid
     world_map = 1 - best_particle.grid
     plt.imshow(world_map, cmap='gray')
 
