@@ -7,8 +7,6 @@ from robot import Robot
 from utils import *
 from config import *
 
-from icp import plot_points
-
 
 if __name__ == "__main__":
     config = SCENCES['scene-1']
@@ -17,27 +15,19 @@ if __name__ == "__main__":
     world = World()
     world.read_map(config['map'])
     world_grid = world.get_grid()
-    occupancy = world.get_occupancy()
 
     # create a robot
-    (x, y, theta) = config['init']
-    R = Robot(x, y, theta, world_grid.shape, world_grid, sense_noise=3.0)
+    (x, y, theta) = config['R_init']
+    R = Robot(x, y, theta, config, world_grid, sense_noise=3.0)
     prev_odo = curr_odo = R.get_state()
-    fig = plt.figure()
-
-    offset = [0, 0]
 
     # initialize particles
-    p = []
+    p = [None] * NUMBER_OF_PARTICLES
+    (x, y, theta) = config['p_init']
     for i in range(NUMBER_OF_PARTICLES):
-        r = Robot(x, y, theta, world_grid.shape)
-        r.w = 1 / NUMBER_OF_PARTICLES
-        p.append(r)
+        p[i] = Robot(x, y, theta, config)
 
-    # initial estimate
-    estimated_R = copy.deepcopy(p[0])
-    prev_scan = curr_scan = []
-    prev_idx = curr_idx = []
+    w = [1 / NUMBER_OF_PARTICLES] * NUMBER_OF_PARTICLES
 
     # monte carlo localization
     for idx, (forward, turn) in enumerate(config['controls']):
@@ -45,14 +35,9 @@ if __name__ == "__main__":
         curr_odo = R.get_state()
         R.update_trajectory()
 
-        z_star, free_grid_star, occupy_grid_star, scan_star = R.sense()
-        curr_scan = free_grid_star
-        curr_idx = scan_star
-
-        free_grid_offset_star, occupy_grid_offset_star = R.absolute2relative(free_grid_star, occupy_grid_star)
-
-        total_weight = 0
-        best_id, best_w = 0, 0
+        z_star, free_grid_star, occupy_grid_star = R.sense()
+        free_grid_offset_star = absolute2relative(free_grid_star, curr_odo)
+        occupy_grid_offset_star = absolute2relative(occupy_grid_star, curr_odo)
 
         for i in range(NUMBER_OF_PARTICLES):
             # Perform scan matching
@@ -74,18 +59,18 @@ if __name__ == "__main__":
 
                 tmp_samples = [None] * NUMBER_OF_MODE_SAMPLES * 2
                 z_list = np.zeros(NUMBER_OF_MODE_SAMPLES * 2)
+                tmp_r = Robot(0, 0, 0, config, p[i].grid)
                 for j in range(NUMBER_OF_MODE_SAMPLES * 2):
-                    x, y, theta = p[i].motion_sample(prev_odo, curr_odo)
+                    x, y, theta = p[i].sample_motion_model(prev_odo, curr_odo)
                     tmp_samples[j] = (x, y, theta)
-                    tmp_r = Robot(x, y, theta, world_grid.shape)
-                    z, _, _, _ = tmp_r.sense(p[i].grid)
-                    measurement_prob = p[i].measurement_model(z_star, z)
-                    z_list[j] = measurement_prob
+                    tmp_r.set_states(x, y, theta)
+                    z, _, _ = tmp_r.sense()
+                    z_list[j] = p[i].measurement_model(z_star, z)
 
-                idx = np.argsort(z_list)[:NUMBER_OF_MODE_SAMPLES]
-                z_list = z_list[idx]
+                tmp_idx = np.argsort(z_list)[:NUMBER_OF_MODE_SAMPLES]
+                z_list = z_list[tmp_idx]
                 samples = [None] * NUMBER_OF_MODE_SAMPLES
-                for l, k in enumerate(idx):
+                for l, k in enumerate(tmp_idx):
                     samples[l] = tmp_samples[k]
 
                 # Compute gaussain proposal
@@ -116,7 +101,7 @@ if __name__ == "__main__":
                 p[i].set_states(x, y, theta)
 
                 # Update weight
-                p[i].w = p[i].w * eta
+                w[i] *= eta
                 
             else:
                 # Simulate a robot motion for each of these particles
@@ -131,31 +116,27 @@ if __name__ == "__main__":
 
             p[i].update_trajectory()
 
-            total_weight += p[i].w
-            if p[i].w > best_w:
-                best_w = p[i].w
-                best_id = i
-
             # Update occupancy grid based on the true measurements
-            free_grid, occupy_grid = p[i].relative2absolute(free_grid_offset_star, occupy_grid_offset_star)
+            p_odo = p[i].get_state()
+            free_grid = relative2absolute(free_grid_offset_star, p_odo).astype(np.int32)
+            occupy_grid = relative2absolute(occupy_grid_offset_star, p_odo).astype(np.int32)
             p[i].update_occupancy_grid(free_grid, occupy_grid)
 
         # normalize
-        N_eff = 0
-        for i in range(NUMBER_OF_PARTICLES):
-            p[i].w /= total_weight
-            N_eff += p[i].w ** 2
-        N_eff = 1 / N_eff
+        w = w / np.sum(w)
+        best_id = np.argsort(w)[-1]
 
         # select best particle
         estimated_R = copy.deepcopy(p[best_id])
 
         # adaptive resampling
+        N_eff = 1 / np.sum(w ** 2)
         if N_eff < NUMBER_OF_PARTICLES / 2:
             print("Resample!")
             # Resample the particles with a sample probability proportional to the importance weight
             # Use low variance sampling method
             new_p = [None] * NUMBER_OF_PARTICLES
+            new_w = [None] * NUMBER_OF_PARTICLES
             J_inv = 1 / NUMBER_OF_PARTICLES
             r = random.random() * J_inv
             c = p[0].w
@@ -167,11 +148,11 @@ if __name__ == "__main__":
                     i += 1
                     c += p[i].w
                 new_p[j] = copy.deepcopy(p[i])
+                new_w[j] = w[i]
 
             p = new_p
+            w = new_w
 
         prev_odo = curr_odo
-        prev_scan = curr_scan
-        prev_idx = curr_idx
 
-        visualize(R, p, estimated_R, world, free_grid_star, idx, offset)
+        visualize(R, p, estimated_R, free_grid_star, config, idx)
