@@ -1,15 +1,25 @@
 import numpy as np
 import random
 import copy
+import os
 
 from world import World
 from robot import Robot
-from utils import *
+from motion_model import MotionModel
+from measurement_model import MeasurementModel
+from utils import absolute2relative, relative2absolute, visualize
 from config import *
 
 
 if __name__ == "__main__":
     config = SCENCES['scene-1']
+
+    output_path = config['output_path']
+    if not os.path.exists(output_path):
+        os.mkdir(output_path)
+    output_path = os.path.join(output_path, "fastslam1")
+    if not os.path.exists(output_path):
+        os.mkdir(output_path)
 
     # create a world map
     world = World()
@@ -27,7 +37,13 @@ if __name__ == "__main__":
     for i in range(NUMBER_OF_PARTICLES):
         p[i] = Robot(x, y, theta, config)
 
-    # monte carlo localization
+    # create motion model
+    motion_model = MotionModel(config['motion_model'])
+
+    # create measurement model
+    measurement_model = MeasurementModel(config['measurement_model'], config['radar_range'])
+
+    # FastSLAM1.0
     for idx, (forward, turn) in enumerate(config['controls']):
         R.move(turn=turn, forward=forward)
         curr_odo = R.get_state()
@@ -40,18 +56,19 @@ if __name__ == "__main__":
         w = np.zeros(NUMBER_OF_PARTICLES)
         for i in range(NUMBER_OF_PARTICLES):
             # Simulate a robot motion for each of these particles
-            x, y, theta = p[i].sample_motion_model(prev_odo, curr_odo)
+            prev_pose = p[i].get_state()
+            x, y, theta = motion_model.sample_motion_model(prev_odo, curr_odo, prev_pose)
             p[i].set_states(x, y, theta)
             p[i].update_trajectory()
     
             # Calculate particle's weights depending on robot's measurement
             z, _, _ = p[i].sense()
-            w[i] = p[i].measurement_model(z_star, z)
+            w[i] = measurement_model.measurement_model(z_star, z)
 
             # Update occupancy grid based on the true measurements
-            p_odo = p[i].get_state()
-            free_grid = relative2absolute(free_grid_offset_star, p_odo).astype(np.int32)
-            occupy_grid = relative2absolute(occupy_grid_offset_star, p_odo).astype(np.int32)
+            curr_pose = p[i].get_state()
+            free_grid = relative2absolute(free_grid_offset_star, curr_pose).astype(np.int32)
+            occupy_grid = relative2absolute(occupy_grid_offset_star, curr_pose).astype(np.int32)
             p[i].update_occupancy_grid(free_grid, occupy_grid)
 
         # normalize
@@ -79,4 +96,4 @@ if __name__ == "__main__":
         p = new_p
         prev_odo = curr_odo
 
-        visualize(R, p, estimated_R, free_grid_star, config, idx)
+        visualize(R, p, estimated_R, free_grid_star, config, idx, "FastSLAM 1.0", True, output_path, "scene1")

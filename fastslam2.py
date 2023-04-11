@@ -1,15 +1,25 @@
 import numpy as np
 import random
 import copy
+import os
 
 from world import World
 from robot import Robot
-from utils import *
+from motion_model import MotionModel
+from measurement_model import MeasurementModel
+from utils import absolute2relative, relative2absolute, visualize
 from config import *
 
 
 if __name__ == "__main__":
     config = SCENCES['scene-1']
+
+    output_path = config['output_path']
+    if not os.path.exists(output_path):
+        os.mkdir(output_path)
+    output_path = os.path.join(output_path, "fastslam2")
+    if not os.path.exists(output_path):
+        os.mkdir(output_path)
 
     # create a world map
     world = World()
@@ -26,6 +36,12 @@ if __name__ == "__main__":
     (x, y, theta) = config['p_init']
     for i in range(NUMBER_OF_PARTICLES):
         p[i] = Robot(x, y, theta, config)
+
+    # create motion model
+    motion_model = MotionModel(config['motion_model'])
+
+    # create measurement model
+    measurement_model = MeasurementModel(config['measurement_model'], config['radar_range'])
 
     w = [1 / NUMBER_OF_PARTICLES] * NUMBER_OF_PARTICLES
 
@@ -60,12 +76,13 @@ if __name__ == "__main__":
                 tmp_samples = [None] * NUMBER_OF_MODE_SAMPLES * 2
                 z_list = np.zeros(NUMBER_OF_MODE_SAMPLES * 2)
                 tmp_r = Robot(0, 0, 0, config, p[i].grid)
+                prev_pose = p[i].get_state()
                 for j in range(NUMBER_OF_MODE_SAMPLES * 2):
-                    x, y, theta = p[i].sample_motion_model(prev_odo, curr_odo)
+                    x, y, theta = motion_model.sample_motion_model(prev_odo, curr_odo, prev_pose)
                     tmp_samples[j] = (x, y, theta)
                     tmp_r.set_states(x, y, theta)
                     z, _, _ = tmp_r.sense()
-                    z_list[j] = p[i].measurement_model(z_star, z)
+                    z_list[j] = measurement_model.measurement_model(z_star, z)
 
                 tmp_idx = np.argsort(z_list)[:NUMBER_OF_MODE_SAMPLES]
                 z_list = z_list[tmp_idx]
@@ -76,7 +93,7 @@ if __name__ == "__main__":
                 # Compute gaussain proposal
                 likelihoods = z_list
                 for j in range(NUMBER_OF_MODE_SAMPLES):
-                    motion_prob = p[i].motion_model(prev_odo, curr_odo, samples[j])
+                    motion_prob = motion_model.motion_model(prev_odo, curr_odo, prev_pose, samples[j])
 
                     #x, y, theta = samples[j]
                     #tmp_r = Robot(x, y, theta, world_grid.shape)
@@ -155,4 +172,4 @@ if __name__ == "__main__":
 
         prev_odo = curr_odo
 
-        visualize(R, p, estimated_R, free_grid_star, config, idx)
+        visualize(R, p, estimated_R, free_grid_star, config, idx, "FastSLAM 2.0", True, output_path, "scene1")

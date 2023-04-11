@@ -1,12 +1,13 @@
 import numpy as np
 
 NUMBER_OF_PARTICLES = 100
-NUMBER_OF_MODE_SAMPLES = 50
+NUMBER_OF_MODE_SAMPLES = 30
 mode_sample_cov = np.diag([0.2, 0.2, 0.01])
 
 SCENCES = {
     'scene-1': {
         'map': 'map/scene1.png',
+        'output_path': "result/",
         'grid_size':(300, 300),
         'R_init': [160, 20, np.pi/2],
         'p_init': [200, 150, np.pi/2],
@@ -15,17 +16,21 @@ SCENCES = {
         'occupy_prob': 0.9,
         'free_prob': 0.35,
 
-        'alpha1': 0.005,
-        'alpha2': 0.005,
-        'alpha3': 0.01,
-        'alpha4': 0.01,
+        'motion_model': {
+            'alpha1': 0.005,
+            'alpha2': 0.005,
+            'alpha3': 0.01,
+            'alpha4': 0.01
+        },
 
-        'p_hit': 0.8,
-        'sigma_hit': 20,
-        'p_short': 0.05,
-        'p_max': 0.1,
-        'p_rand': 0.05,
-        'lambda_short': 0.15,
+        'measurement_model': {
+            'p_hit': 0.8,
+            'sigma_hit': 20,
+            'p_short': 0.05,
+            'p_max': 0.1,
+            'p_rand': 0.05,
+            'lambda_short': 0.15,
+        },
 
         'num_sensors': 15,
         'radar_length': 100,

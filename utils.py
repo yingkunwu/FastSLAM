@@ -73,10 +73,6 @@ def create_rotation_matrix(theta):
     return R, R_inv
 
 
-def rotate(center, vector, R):
-    vector = (vector - center) @ R.T + center
-    return vector
-
 def absolute2relative(position, states):
     x, y, theta = states
     pose = np.array([x, y])
@@ -86,6 +82,7 @@ def absolute2relative(position, states):
     position = np.array(position) @ R_inv.T
 
     return position
+
 
 def relative2absolute(position, states):
     x, y, theta = states
@@ -98,8 +95,8 @@ def relative2absolute(position, states):
     return position
 
 
-def visualize(robot, particles, best_particle, radar_list, config, step):
-    plt.suptitle("Fast SLAM 1.0")
+def visualize(robot, particles, best_particle, radar_list, config, step, title="Fast SLAM", save_img=False, output_path=None, filename=None):
+    plt.suptitle(title)
     plt.title("number of particles:{}, step:{}".format(len(particles), step + 1))
     grid_size = best_particle.grid_size
     plt.xlim(0, grid_size[1])
@@ -129,6 +126,9 @@ def visualize(robot, particles, best_particle, radar_list, config, step):
     # draw particles position
     for p in particles:
         plt.plot(p.x, p.y, "go", markersize=1)
+
+    if save_img and step % 10 == 0:
+        plt.savefig('{}/{}_{}.png'.format(output_path, filename, step))
 
     plt.pause(0.01)
     plt.draw()
