@@ -64,49 +64,35 @@ if __name__ == "__main__":
         free_grid_offset_star = absolute2relative(free_grid_star, curr_odo)
         occupy_grid_offset_star = absolute2relative(occupy_grid_star, curr_odo)
         #occupy_grid_star = relative2absolute(occupy_grid_offset_star, prev_odo)
-        edges_offset = absolute2relative(edges_star, prev_odo)
+        #edges_offset = absolute2relative(edges_star, prev_odo)
         #prev_odo = curr_odo
         #plot_points(np.array(edges_star).T, np.array(occupy_grid_star).T, fig)
         #continue
 
         for i in range(NUMBER_OF_PARTICLES):
             prev_pose = p[i].get_state()
-            #tmp_r = Robot(0, 0, 0, config, p[i].grid)
+            tmp_r = Robot(0, 0, 0, config, p[i].grid)
 
-            #pose_hat = None
-            #best_guess = 0
-            #for j in range(NUMBER_OF_MODE_SAMPLES):
-            #    x, y, theta = motion_model.sample_motion_model(prev_odo, curr_odo, prev_pose)
-            #    tmp_r.set_states(x, y, theta)
-            #    z, _, _ = tmp_r.sense()
-            #    guess = measurement_model.measurement_model(z_star, z)
-            #    if guess > best_guess:
-            #        best_guess = guess
-            #        pose_hat = (x, y, theta)
-            guess_pose = motion_model.sample_motion_model(prev_odo, curr_odo, prev_pose)
-            scan = relative2absolute(occupy_grid_offset_star, prev_pose)
-            #edges = relative2absolute(edges_offset, prev_pose)
-            #occupy_grid_star = relative2absolute(occupy_grid_offset_star, prev_pose)
-            tmp = np.where(p[i].grid > 0.5)
-            edges = np.stack((tmp[1], tmp[0])).T
+            best_guess = -1
+            for j in range(NUMBER_OF_MODE_SAMPLES):
+                x, y, theta = motion_model.sample_motion_model(prev_odo, curr_odo, prev_pose)
+                tmp_r.set_states(x, y, theta)
+                z, _, _ = tmp_r.sense()
+                guess = measurement_model.measurement_model(z_star, z)
+                if guess > best_guess:
+                    best_guess = guess
+                    pose_hat = (x, y, theta)
+
+            #guess_pose = motion_model.sample_motion_model(prev_odo, curr_odo, prev_pose)
+            #scan = relative2absolute(occupy_grid_offset_star, prev_pose)
+            #tmp = np.where(p[i].grid > 0.5)
+            #edges = np.stack((tmp[1], tmp[0])).T
             
             #plot_points(np.array(edges).T, np.array(scan).T, fig)
-            pose_hat = scan_matching(edges, scan, prev_pose)
-            #plot_points(edges.T, scan.T, fig)
-            # Perform scan matching
-            #_, free_grid, occupy_grid, scan = p[i].sense() #// For simplicity I use ground truth map for scan matching
-            #if len(free_grid) > 0 and len(occupy_grid) > 0:
-            #    free_grid, occupy_grid = p[i].absolute2relative(free_grid, occupy_grid)
-            #    free_grid_prime, occupy_grid_prime = R.relative2absolute(free_grid, occupy_grid)
-
-            #    pose = np.array(p[i].get_state())
-            #    pose_hat = scan_matching(occupy_grid_prime, occupy_grid_star, pose)
-                #plot_points(occupy_grid_offset_star.T, occupy_grid.T, fig)
-            #else:
-            #    pose_hat = None
+            #pose_hat = scan_matching(edges, scan, prev_pose)
 
             # If the scan matching fails, the pose and the weights are computed according to the motion model
-            if pose_hat is not None and idx > 5:
+            if best_guess > 0:
                 """tmp_samples = [None] * NUMBER_OF_MODE_SAMPLES * 2
                 z_list = np.zeros(NUMBER_OF_MODE_SAMPLES * 2)
                 tmp_r = Robot(0, 0, 0, config, p[i].grid)
@@ -143,7 +129,8 @@ if __name__ == "__main__":
                     measurement_prob = measurement_model.measurement_model(z_star, z)
 
                     likelihoods[j] = motion_prob * measurement_prob
-                    #likelihoods[j] = motion_prob * z_list[j]
+                    #likelihoods[j] = measurement_prob
+                    
 
                 eta = np.sum(likelihoods)
 
