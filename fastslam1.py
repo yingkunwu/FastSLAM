@@ -12,7 +12,8 @@ from config import *
 
 
 if __name__ == "__main__":
-    config = SCENCES['scene-1']
+    name = 'scene-1'
+    config = SCENCES[name]
 
     output_path = config['output_path']
     if not os.path.exists(output_path):
@@ -20,6 +21,7 @@ if __name__ == "__main__":
     output_path = os.path.join(output_path, "fastslam1")
     if not os.path.exists(output_path):
         os.mkdir(output_path)
+    output_path = os.path.join(output_path, name)
 
     # create a world map
     world = World()
@@ -96,4 +98,4 @@ if __name__ == "__main__":
         p = new_p
         prev_odo = curr_odo
 
-        visualize(R, p, estimated_R, free_grid_star, config, idx, "FastSLAM 1.0", True, output_path, "scene1")
+        visualize(R, p, estimated_R, free_grid_star, config, idx, "FastSLAM 1.0", output_path, True)

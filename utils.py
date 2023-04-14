@@ -2,6 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+from icp import icp_matching
+
+
 # Bresenhams Line Generation Algorithm
 # ref: https://www.geeksforgeeks.org/bresenhams-line-generation-algorithm/
 def bresenham(x1, y1, x2, y2):
@@ -44,6 +47,43 @@ def bresenham(x1, y1, x2, y2):
             pk = pk + 2 * dy - 2 * dx
 
     return loc
+
+
+def data_association(prev_points, curr_points):
+    prev_points = np.array(prev_points)
+    curr_points = np.array(curr_points)
+
+    prev_points_matched, curr_points_matched = [], []
+    for i in range(len(curr_points)):
+        diff = np.sum(np.power(curr_points[i] - prev_points, 2), axis=1)
+        minIdx = np.argmin(diff)
+        prev_points_matched.append(prev_points[minIdx])
+        curr_points_matched.append(curr_points[i])
+
+    return np.array(prev_points_matched), np.array(curr_points_matched)
+
+
+def scan_matching(prev_points, curr_points, pose):
+    if len(prev_points) < 5 or len(curr_points) < 5 or len(prev_points) < len(curr_points):
+        return None
+
+    prev_points = np.array(prev_points)
+    curr_points = np.array(curr_points)
+    # delete duplicates
+    curr_points = np.unique(curr_points, axis=0)
+    #prev_points, curr_points = data_association(prev_points, curr_points)
+
+    R, t = icp_matching(prev_points.T, curr_points.T)
+
+    if abs(t[0]) > 5 or abs(t[1]) > 5:
+        return None
+    print(t, np.arctan2(R[1][0], R[0][0]))
+    
+    x = pose[0] - t[0]
+    y = pose[1] - t[1]
+    orientation = wrapAngle(pose[2] + np.arctan2(R[1][0], R[0][0]))
+
+    return np.array((x, y, orientation))
 
 
 def wrapAngle(radian):
@@ -95,7 +135,8 @@ def relative2absolute(position, states):
     return position
 
 
-def visualize(robot, particles, best_particle, radar_list, config, step, title="Fast SLAM", save_img=False, output_path=None, filename=None):
+def visualize(robot, particles, best_particle, radar_list, config, step, title, output_path, visualize=False):
+    plt.clf()
     plt.suptitle(title)
     plt.title("number of particles:{}, step:{}".format(len(particles), step + 1))
     grid_size = best_particle.grid_size
@@ -127,9 +168,9 @@ def visualize(robot, particles, best_particle, radar_list, config, step, title="
     for p in particles:
         plt.plot(p.x, p.y, "go", markersize=1)
 
-    if save_img and step % 10 == 0:
-        plt.savefig('{}/{}_{}.png'.format(output_path, filename, step))
+    if step % 10 == 0:
+        plt.savefig('{}_{}.png'.format(output_path, step))
 
-    plt.pause(0.01)
-    plt.draw()
-    plt.clf()
+    if visualize:
+        plt.draw()
+        plt.pause(0.01)

@@ -9,6 +9,8 @@ EPS = 0.0001
 MAX_ITER = 100
 show_animation = False
 
+if show_animation:
+    fig = plt.figure()
 
 def icp_matching(previous_points, current_points):
     """
@@ -26,26 +28,39 @@ def icp_matching(previous_points, current_points):
     preError = np.inf
     count = 0
 
-    if show_animation:
-        fig = plt.figure()
-
     while dError >= EPS:
         count += 1
 
+        previous_points_matched, current_points_matched, total_error = nearest_neighbor_association(previous_points, current_points)
+        if previous_points_matched.shape[1] < 5:
+            return None, [100, 100]
+
         if show_animation:  # pragma: no cover
-            plot_points(previous_points, current_points, fig)
-            plt.pause(0.1)
+            plot_points(previous_points_matched, current_points_matched, fig)
 
-        indexes, error = nearest_neighbor_association(previous_points, current_points)
-        Rt, Tt = svd_motion_estimation(previous_points[:, indexes], current_points)
+        # perform RANSAC
+        min_error = np.float('inf')
+        best_Rt = None
+        best_Tt = None
+        for _ in range(15):
+            sample = np.random.choice(current_points_matched.shape[1], 5, replace=False)
+            
+            Rt, Tt = svd_motion_estimation(previous_points_matched[:, sample], current_points_matched[:, sample])
+            temp_points = (Rt @ previous_points_matched) + Tt[:, np.newaxis]
+            _, _, error = nearest_neighbor_association(temp_points, current_points_matched)
+            if error < min_error:
+                min_error = error
+                best_Rt = Rt
+                best_Tt = Tt
+
         # update current points
-        previous_points = (Rt @ previous_points) + Tt[:, np.newaxis]
+        previous_points = (best_Rt @ previous_points) + best_Tt[:, np.newaxis]
 
-        dError = preError - error
+        dError = preError - total_error
         #print("Residual:", error)
 
-        preError = error
-        H = update_homogeneous_matrix(H, Rt, Tt)
+        preError = total_error
+        H = update_homogeneous_matrix(H, best_Rt, best_Tt)
 
         if MAX_ITER <= count:
             break
@@ -66,20 +81,19 @@ def update_homogeneous_matrix(Hin, R, T):
     return Hin @ H
 
 
-def nearest_neighbor_association(previous_points, current_points):
+def nearest_neighbor_association(prev_points, curr_points):
+    d = np.linalg.norm(np.repeat(curr_points, prev_points.shape[1], axis=1)
+                       - np.tile(prev_points, (1, curr_points.shape[1])), axis=0)
+    d = d.reshape(curr_points.shape[1], prev_points.shape[1])
 
-    # calc the sum of residual errors
-    delta_points = previous_points - current_points
-    d = np.linalg.norm(delta_points, axis=0)
-    error = sum(d)
+    indexes = np.argmin(d, axis=1)
+    error = np.min(d, axis=1)
+    mask = error < 2
 
-    # calc index with nearest  neighbor assosiation
-    d = np.linalg.norm(np.repeat(current_points, previous_points.shape[1], axis=1)
-                       - np.tile(previous_points, (1, current_points.shape[1])), axis=0)
+    previous_points_matched = prev_points[:, indexes][:, mask]
+    current_points_matched = curr_points[:, mask]
 
-    indexes = np.argmin(d.reshape(current_points.shape[1], previous_points.shape[1]), axis=1)
-
-    return indexes, error
+    return previous_points_matched, current_points_matched, np.sum(error)
 
 
 def svd_motion_estimation(previous_points, current_points):
@@ -114,7 +128,11 @@ def plot_points(previous_points, current_points, figure):
         figure.canvas.draw()
     else:
         plt.cla()
-        plt.plot(previous_points[0, :], previous_points[1, :], ".r")
-        plt.plot(current_points[0, :], current_points[1, :], ".b")
+        plt.plot(previous_points[0, :], previous_points[1, :], ".r", markersize=1)
+        plt.plot(current_points[0, :], current_points[1, :], ".b", markersize=1)
         plt.plot(0.0, 0.0, "xr")
         plt.axis("equal")
+
+    plt.pause(0.01)
+    plt.draw()
+    plt.clf()

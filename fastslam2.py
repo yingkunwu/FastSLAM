@@ -10,9 +10,14 @@ from measurement_model import MeasurementModel
 from utils import absolute2relative, relative2absolute, visualize
 from config import *
 
+import matplotlib.pyplot as plt
+from icp import plot_points
+from utils import scan_matching
+
 
 if __name__ == "__main__":
-    config = SCENCES['scene-1']
+    name = 'scene-1'
+    config = SCENCES[name]
 
     output_path = config['output_path']
     if not os.path.exists(output_path):
@@ -20,11 +25,13 @@ if __name__ == "__main__":
     output_path = os.path.join(output_path, "fastslam2")
     if not os.path.exists(output_path):
         os.mkdir(output_path)
+    output_path = os.path.join(output_path, name)
 
     # create a world map
     world = World()
     world.read_map(config['map'])
     world_grid = world.get_grid()
+    edges_star = world.get_edges()
 
     # create a robot
     (x, y, theta) = config['R_init']
@@ -43,7 +50,9 @@ if __name__ == "__main__":
     # create measurement model
     measurement_model = MeasurementModel(config['measurement_model'], config['radar_range'])
 
+    # initialize particles' weight
     w = [1 / NUMBER_OF_PARTICLES] * NUMBER_OF_PARTICLES
+    fig = plt.figure()
 
     # monte carlo localization
     for idx, (forward, turn) in enumerate(config['controls']):
@@ -54,8 +63,36 @@ if __name__ == "__main__":
         z_star, free_grid_star, occupy_grid_star = R.sense()
         free_grid_offset_star = absolute2relative(free_grid_star, curr_odo)
         occupy_grid_offset_star = absolute2relative(occupy_grid_star, curr_odo)
+        #occupy_grid_star = relative2absolute(occupy_grid_offset_star, prev_odo)
+        edges_offset = absolute2relative(edges_star, prev_odo)
+        #prev_odo = curr_odo
+        #plot_points(np.array(edges_star).T, np.array(occupy_grid_star).T, fig)
+        #continue
 
         for i in range(NUMBER_OF_PARTICLES):
+            prev_pose = p[i].get_state()
+            #tmp_r = Robot(0, 0, 0, config, p[i].grid)
+
+            #pose_hat = None
+            #best_guess = 0
+            #for j in range(NUMBER_OF_MODE_SAMPLES):
+            #    x, y, theta = motion_model.sample_motion_model(prev_odo, curr_odo, prev_pose)
+            #    tmp_r.set_states(x, y, theta)
+            #    z, _, _ = tmp_r.sense()
+            #    guess = measurement_model.measurement_model(z_star, z)
+            #    if guess > best_guess:
+            #        best_guess = guess
+            #        pose_hat = (x, y, theta)
+            guess_pose = motion_model.sample_motion_model(prev_odo, curr_odo, prev_pose)
+            scan = relative2absolute(occupy_grid_offset_star, prev_pose)
+            #edges = relative2absolute(edges_offset, prev_pose)
+            #occupy_grid_star = relative2absolute(occupy_grid_offset_star, prev_pose)
+            tmp = np.where(p[i].grid > 0.5)
+            edges = np.stack((tmp[1], tmp[0])).T
+            
+            #plot_points(np.array(edges).T, np.array(scan).T, fig)
+            pose_hat = scan_matching(edges, scan, prev_pose)
+            #plot_points(edges.T, scan.T, fig)
             # Perform scan matching
             #_, free_grid, occupy_grid, scan = p[i].sense() #// For simplicity I use ground truth map for scan matching
             #if len(free_grid) > 0 and len(occupy_grid) > 0:
@@ -69,11 +106,8 @@ if __name__ == "__main__":
             #    pose_hat = None
 
             # If the scan matching fails, the pose and the weights are computed according to the motion model
-            if True:
-                # Sample around the mode
-                #samples = np.random.multivariate_normal(pose_hat, mode_sample_cov, NUMBER_OF_MODE_SAMPLES)
-
-                tmp_samples = [None] * NUMBER_OF_MODE_SAMPLES * 2
+            if pose_hat is not None and idx > 5:
+                """tmp_samples = [None] * NUMBER_OF_MODE_SAMPLES * 2
                 z_list = np.zeros(NUMBER_OF_MODE_SAMPLES * 2)
                 tmp_r = Robot(0, 0, 0, config, p[i].grid)
                 prev_pose = p[i].get_state()
@@ -89,19 +123,27 @@ if __name__ == "__main__":
                 samples = [None] * NUMBER_OF_MODE_SAMPLES
                 for l, k in enumerate(tmp_idx):
                     samples[l] = tmp_samples[k]
-
+                    
                 # Compute gaussain proposal
-                likelihoods = z_list
+                likelihoods = z_list"""
+                
+                # Sample around the mode
+                samples = np.random.multivariate_normal(pose_hat, mode_sample_cov, NUMBER_OF_MODE_SAMPLES)
+                # Compute gaussain proposal
+                likelihoods = np.zeros(NUMBER_OF_MODE_SAMPLES)
+
+                tmp_r = Robot(0, 0, 0, config, p[i].grid)
+                prev_pose = p[i].get_state()
                 for j in range(NUMBER_OF_MODE_SAMPLES):
                     motion_prob = motion_model.motion_model(prev_odo, curr_odo, prev_pose, samples[j])
 
-                    #x, y, theta = samples[j]
-                    #tmp_r = Robot(x, y, theta, world_grid.shape)
-                    #z, _, _, _ = tmp_r.sense(p[i].grid)
-                    #measurement_prob = p[i].measurement_model(z_star, z)
+                    x, y, theta = samples[j]
+                    tmp_r.set_states(x, y, theta)
+                    z, _, _ = tmp_r.sense()
+                    measurement_prob = measurement_model.measurement_model(z_star, z)
 
-                    #likelihoods[j] = motion_prob * measurement_prob
-                    likelihoods[j] = motion_prob * z_list[j]
+                    likelihoods[j] = motion_prob * measurement_prob
+                    #likelihoods[j] = motion_prob * z_list[j]
 
                 eta = np.sum(likelihoods)
 
@@ -119,17 +161,17 @@ if __name__ == "__main__":
 
                 # Update weight
                 w[i] *= eta
+                print("scan: ", w[i])
                 
             else:
                 # Simulate a robot motion for each of these particles
-                p[i].motion_update(prev_odo, curr_odo)
+                x, y, theta = motion_model.sample_motion_model(prev_odo, curr_odo, prev_pose)
+                p[i].set_states(x, y, theta)
         
                 # Calculate particle's weights depending on robot's measurement
-                z, _, _, _ = p[i].sense()
-                w = p[i].measurement_model(z_star, z)
-
-                # Update weight
-                p[i].w = p[i].w * w
+                z, _, _ = p[i].sense()
+                w[i] *= measurement_model.measurement_model(z_star, z)
+                print("not scan: ", w[i])
 
             p[i].update_trajectory()
 
@@ -156,14 +198,14 @@ if __name__ == "__main__":
             new_w = [None] * NUMBER_OF_PARTICLES
             J_inv = 1 / NUMBER_OF_PARTICLES
             r = random.random() * J_inv
-            c = p[0].w
+            c = w[0]
 
             i = 0
             for j in range(NUMBER_OF_PARTICLES):
                 U = r + j * J_inv
                 while (U > c):
                     i += 1
-                    c += p[i].w
+                    c += w[i]
                 new_p[j] = copy.deepcopy(p[i])
                 new_w[j] = w[i]
 
@@ -172,4 +214,4 @@ if __name__ == "__main__":
 
         prev_odo = curr_odo
 
-        visualize(R, p, estimated_R, free_grid_star, config, idx, "FastSLAM 2.0", True, output_path, "scene1")
+        visualize(R, p, estimated_R, free_grid_star, config, idx, "FastSLAM 2.0", output_path, False)

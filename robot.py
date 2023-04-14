@@ -34,7 +34,7 @@ class Robot(object):
 
         # parameters for beam range sensor
         self.num_sensors = config['num_sensors']
-        self.radar_theta = (np.arange(0, self.num_sensors)) * (2 * np.pi / self.num_sensors)
+        self.radar_theta = (np.arange(0, self.num_sensors) - self.num_sensors // 2) * (np.pi / self.num_sensors)
         self.radar_length = config['radar_length']
         self.radar_range = config['radar_range']
 
