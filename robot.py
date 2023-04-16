@@ -23,7 +23,7 @@ class Robot(object):
 
         # initialize map occupancy probability
         if grid is not None:
-            self.grid = 1 - grid
+            self.grid = grid
             self.grid_size = self.grid.shape
         else:
             self.grid_size = config['grid_size']

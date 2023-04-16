@@ -14,8 +14,8 @@ class World(object):
         color = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         self.height, self.width = color.shape[:2]
 
-        self.grid = np.ones((self.height, self.width))
-        self.grid[(color != (255, 255, 255)).any(axis=2)] = 0
+        self.grid = np.zeros((self.height, self.width))
+        self.grid[(color != (255, 255, 255)).any(axis=2)] = 1
 
         grayscale = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         edges = cv2.Canny(grayscale, 100, 200, True)

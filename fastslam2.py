@@ -74,6 +74,7 @@ if __name__ == "__main__":
             tmp_r = Robot(0, 0, 0, config, p[i].grid)
 
             best_guess = -1
+            pose_hat = None
             for j in range(NUMBER_OF_MODE_SAMPLES):
                 x, y, theta = motion_model.sample_motion_model(prev_odo, curr_odo, prev_pose)
                 tmp_r.set_states(x, y, theta)
@@ -117,9 +118,7 @@ if __name__ == "__main__":
                 samples = np.random.multivariate_normal(pose_hat, mode_sample_cov, NUMBER_OF_MODE_SAMPLES)
                 # Compute gaussain proposal
                 likelihoods = np.zeros(NUMBER_OF_MODE_SAMPLES)
-
-                tmp_r = Robot(0, 0, 0, config, p[i].grid)
-                prev_pose = p[i].get_state()
+ 
                 for j in range(NUMBER_OF_MODE_SAMPLES):
                     motion_prob = motion_model.motion_model(prev_odo, curr_odo, prev_pose, samples[j])
 
