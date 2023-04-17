@@ -2,7 +2,7 @@ import numpy as np
 
 NUMBER_OF_PARTICLES = 40
 NUMBER_OF_MODE_SAMPLES = 30
-mode_sample_cov = np.diag([0.0005, 0.0005, 0.0001])
+mode_sample_cov = np.diag([0.00005, 0.00005, 0.00001])
 
 SCENCES = {
     'scene-1': {

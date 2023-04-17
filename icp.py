@@ -31,30 +31,29 @@ def icp_matching(previous_points, current_points):
     while dError >= EPS:
         count += 1
 
-        previous_points_matched, current_points_matched, total_error = nearest_neighbor_association(previous_points, current_points)
-        if previous_points_matched.shape[1] < 5:
-            return None, [100, 100]
+        indexes, total_error = nearest_neighbor_association(previous_points, current_points)
+        previous_points_matched = previous_points[:, indexes]
 
         if show_animation:  # pragma: no cover
-            plot_points(previous_points_matched, current_points_matched, fig)
+            plot_points(previous_points_matched, current_points, fig)
 
         # perform RANSAC
         min_error = np.float('inf')
         best_Rt = None
         best_Tt = None
         for _ in range(15):
-            sample = np.random.choice(current_points_matched.shape[1], 5, replace=False)
+            sample = np.random.choice(current_points.shape[1], 5, replace=False)
             
-            Rt, Tt = svd_motion_estimation(previous_points_matched[:, sample], current_points_matched[:, sample])
-            temp_points = (Rt @ previous_points_matched) + Tt[:, np.newaxis]
-            _, _, error = nearest_neighbor_association(temp_points, current_points_matched)
+            Rt, Tt = svd_motion_estimation(previous_points_matched[:, sample], current_points[:, sample])
+            temp_points = (Rt @ current_points) + Tt[:, np.newaxis]
+            _, error = nearest_neighbor_association(previous_points_matched, temp_points)
             if error < min_error:
                 min_error = error
                 best_Rt = Rt
                 best_Tt = Tt
 
         # update current points
-        previous_points = (best_Rt @ previous_points) + best_Tt[:, np.newaxis]
+        current_points = (best_Rt @ current_points) + best_Tt[:, np.newaxis]
 
         dError = preError - total_error
         #print("Residual:", error)
@@ -89,7 +88,7 @@ def nearest_neighbor_association(prev_points, curr_points):
     indexes = np.argmin(d, axis=1)
     error = np.min(d, axis=1)
 
-    return prev_points[:, indexes], curr_points, np.sum(error)
+    return indexes, np.sum(error)
 
 
 def svd_motion_estimation(previous_points, current_points):
@@ -102,8 +101,8 @@ def svd_motion_estimation(previous_points, current_points):
     W = c_shift @ p_shift.T
     u, s, vh = np.linalg.svd(W)
 
-    R = u @ vh.T
-    t = cm - (R @ pm)
+    R = (u @ vh).T
+    t = pm - (R @ cm)
 
     return R, t
 

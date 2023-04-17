@@ -4,10 +4,6 @@ import numpy as np
 from utils import *
 
 
-random.seed(10)
-np.random.rand(10)
-
-
 class Robot(object):
     def __init__(self, x, y, theta, config, grid=None, sense_noise=None):
         # initialize robot pose

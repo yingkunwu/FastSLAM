@@ -7,11 +7,8 @@ from world import World
 from robot import Robot
 from motion_model import MotionModel
 from measurement_model import MeasurementModel
-from utils import absolute2relative, relative2absolute, visualize
+from utils import absolute2relative, relative2absolute, scan_matching, visualize
 from config import *
-
-import matplotlib.pyplot as plt
-from utils import scan_matching
 
 
 if __name__ == "__main__":
@@ -21,7 +18,7 @@ if __name__ == "__main__":
     output_path = config['output_path']
     if not os.path.exists(output_path):
         os.mkdir(output_path)
-    output_path = os.path.join(output_path, "fastslam3")
+    output_path = os.path.join(output_path, "fastslam2")
     if not os.path.exists(output_path):
         os.mkdir(output_path)
     output_path = os.path.join(output_path, name)
@@ -50,7 +47,6 @@ if __name__ == "__main__":
 
     # initialize particles' weight
     w = [1 / NUMBER_OF_PARTICLES] * NUMBER_OF_PARTICLES
-    fig = plt.figure()
 
     # monte carlo localization
     for idx, (forward, turn) in enumerate(config['controls']):
@@ -66,22 +62,12 @@ if __name__ == "__main__":
             prev_pose = p[i].get_state()
             tmp_r = Robot(0, 0, 0, config, p[i].grid)
 
-            """best_guess = -1
-            pose_hat = None
-            for j in range(NUMBER_OF_MODE_SAMPLES):
-                x, y, theta = motion_model.sample_motion_model(prev_odo, curr_odo, prev_pose)
-                tmp_r.set_states(x, y, theta)
-                z, _, _ = tmp_r.sense()
-                guess = measurement_model.measurement_model(z_star, z)
-                if guess > best_guess:
-                    best_guess = guess
-                    pose_hat = (x, y, theta)"""
-
+            # generate initial guess from motion model
             guess_pose = motion_model.sample_motion_model(prev_odo, curr_odo, prev_pose)
             scan = relative2absolute(occupy_grid_offset_star, guess_pose).astype(np.int32)
             tmp = np.where(p[i].grid >= 0.9)
             edges = np.stack((tmp[1], tmp[0])).T
-            
+            # refine guess pose by scan matching
             pose_hat = scan_matching(edges, scan, guess_pose)
 
             # If the scan matching fails, the pose and the weights are computed according to the motion model

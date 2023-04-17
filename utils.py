@@ -52,9 +52,6 @@ def bresenham(x1, y1, x2, y2):
 def scan_matching(prev_points, curr_points, pose):
     if len(prev_points) < 5 or len(curr_points) < 5 or len(prev_points) < len(curr_points):
         return None
-
-    prev_points = np.array(prev_points)
-    curr_points = np.array(curr_points)
     
     # delete duplicates
     curr_points = np.unique(curr_points, axis=0)
@@ -63,12 +60,12 @@ def scan_matching(prev_points, curr_points, pose):
 
     if abs(t[0]) > 5 or abs(t[1]) > 5:
         return None
-    
-    x = pose[0] - t[0]
-    y = pose[1] - t[1]
-    orientation = wrapAngle(pose[2] + np.arctan2(R[1][0], R[0][0]))
+    else:
+        x = pose[0] + t[0]
+        y = pose[1] + t[1]
+        orientation = wrapAngle(pose[2] + np.arctan2(R[1][0], R[0][0]))
 
-    return np.array((x, y, orientation))
+        return np.array((x, y, orientation))
 
 
 def wrapAngle(radian):
