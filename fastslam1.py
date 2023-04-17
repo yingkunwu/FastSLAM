@@ -12,7 +12,7 @@ from config import *
 
 
 if __name__ == "__main__":
-    name = 'scene-1'
+    name = 'scene-2'
     config = SCENCES[name]
 
     output_path = config['output_path']
@@ -98,4 +98,4 @@ if __name__ == "__main__":
         p = new_p
         prev_odo = curr_odo
 
-        visualize(R, p, estimated_R, free_grid_star, config, idx, "FastSLAM 1.0", output_path, True)
+        visualize(R, p, estimated_R, free_grid_star, idx, "FastSLAM 1.0", output_path, False)

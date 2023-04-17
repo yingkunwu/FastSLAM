@@ -156,4 +156,4 @@ if __name__ == "__main__":
 
         prev_odo = curr_odo
 
-        visualize(R, p, estimated_R, free_grid_star, config, idx, "FastSLAM 2.0", output_path, False)
+        visualize(R, p, estimated_R, free_grid_star, idx, "FastSLAM 2.0", output_path, False)

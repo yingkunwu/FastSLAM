@@ -1,9 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-
 from icp import icp_matching
-
+fig, (ax1, ax2) = plt.subplots(1, 2)
 
 # Bresenhams Line Generation Algorithm
 # ref: https://www.geeksforgeeks.org/bresenhams-line-generation-algorithm/
@@ -117,38 +116,45 @@ def relative2absolute(position, states):
     return position
 
 
-def visualize(robot, particles, best_particle, radar_list, config, step, title, output_path, visualize=False):
-    plt.clf()
-    plt.suptitle(title)
-    plt.title("number of particles:{}, step:{}".format(len(particles), step + 1))
-    grid_size = best_particle.grid_size
-    plt.xlim(0, grid_size[1])
-    plt.ylim(0, grid_size[0])
+def visualize(robot, particles, best_particle, radar_list, step, title, output_path, visualize=False):
+    ax1.clear()
+    ax2.clear()
+    fig.suptitle("{}\n\n number of particles:{}, step:{}".format(title, len(particles), step + 1))
+    ax1.set_title("Estimated by Particles")
+    ax2.set_title("Ground Truth")
+    ax1.axis("off")
+    ax2.axis("off")
 
-    Rx, Ry, _ = config['R_init']
-    px, py, _ = config['p_init']
-    offset = [px - Rx, py - Ry]
+    grid_size = best_particle.grid_size
+    ax1.set_xlim(0, grid_size[1])
+    ax1.set_ylim(0, grid_size[0])
+
+    grid_size = robot.grid_size
+    ax2.set_xlim(0, grid_size[1])
+    ax2.set_ylim(0, grid_size[0])
 
     # draw map
     world_map = 1 - best_particle.grid
-    plt.imshow(world_map, cmap='gray')
+    ax1.imshow(world_map, cmap='gray')
+    world_map = 1 - robot.grid
+    ax2.imshow(world_map, cmap='gray')
 
     # draw radar beams
     for (x, y) in radar_list:
-        plt.plot(x + offset[0], y + offset[1], "yo", markersize=1)
+        ax2.plot(x, y, "yo", markersize=1)
 
     # draw tragectory
     true_path = np.array(robot.trajectory)
+    ax2.plot(true_path[:, 0], true_path[:, 1], "b")
     estimated_path = np.array(best_particle.trajectory)
-    plt.plot(true_path[:, 0] + offset[0], true_path[:, 1] + offset[1], "b")
-    plt.plot(estimated_path[:, 0], estimated_path[:, 1], "g")
-
-    # draw robot position
-    plt.plot(robot.x + offset[0], robot.y + offset[1], "bo")
+    ax1.plot(estimated_path[:, 0], estimated_path[:, 1], "g")
 
     # draw particles position
     for p in particles:
-        plt.plot(p.x, p.y, "go", markersize=1)
+        ax1.plot(p.x, p.y, "go", markersize=1)
+
+    # draw robot position
+    ax2.plot(robot.x, robot.y, "bo")
 
     if step % 10 == 0:
         plt.savefig('{}_{}.png'.format(output_path, step))
