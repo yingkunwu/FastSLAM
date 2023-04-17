@@ -4,6 +4,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from utils import wrapAngle
+
 
 EPS = 0.0001
 MAX_ITER = 100
@@ -12,16 +14,18 @@ show_animation = False
 if show_animation:
     fig = plt.figure()
 
-def icp_matching(previous_points, current_points):
-    """
-    Iterative Closest Point matching
-    - input
-    previous_points: 2D or 3D points in the previous frame
-    current_points: 2D or 3D points in the current frame
-    - output
-    R: Rotation matrix
-    T: Translation vector
-    """
+
+def icp_matching(edges, scan, pose):
+    if len(scan) < 5 or len(edges) < len(scan):
+        return None
+    
+    # delete duplicate scans
+    scan = np.unique(scan, axis=0)
+
+    # transpose edges and scan to match the implementation of algorithm
+    edges = edges.T
+    scan = scan.T
+
     H = np.diag([1, 1, 1])  # homogeneous transformation matrix
 
     dError = np.inf
@@ -31,29 +35,29 @@ def icp_matching(previous_points, current_points):
     while dError >= EPS:
         count += 1
 
-        indexes, total_error = nearest_neighbor_association(previous_points, current_points)
-        previous_points_matched = previous_points[:, indexes]
+        indexes, total_error = nearest_neighbor_association(edges, scan)
+        edges_matched = edges[:, indexes]
 
-        if show_animation:  # pragma: no cover
-            plot_points(previous_points_matched, current_points, fig)
+        if show_animation:
+            plot_points(edges_matched, scan, fig)
 
         # perform RANSAC
         min_error = np.float('inf')
         best_Rt = None
         best_Tt = None
         for _ in range(15):
-            sample = np.random.choice(current_points.shape[1], 5, replace=False)
+            sample = np.random.choice(scan.shape[1], 5, replace=False)
             
-            Rt, Tt = svd_motion_estimation(previous_points_matched[:, sample], current_points[:, sample])
-            temp_points = (Rt @ current_points) + Tt[:, np.newaxis]
-            _, error = nearest_neighbor_association(previous_points_matched, temp_points)
+            Rt, Tt = svd_motion_estimation(edges_matched[:, sample], scan[:, sample])
+            temp_points = (Rt @ scan) + Tt[:, np.newaxis]
+            _, error = nearest_neighbor_association(edges_matched, temp_points)
             if error < min_error:
                 min_error = error
                 best_Rt = Rt
                 best_Tt = Tt
 
-        # update current points
-        current_points = (best_Rt @ current_points) + best_Tt[:, np.newaxis]
+        # update current scan for iterative refinement
+        scan = (best_Rt @ scan) + best_Tt[:, np.newaxis]
 
         dError = preError - total_error
         #print("Residual:", error)
@@ -67,7 +71,14 @@ def icp_matching(previous_points, current_points):
     R = np.array(H[0:-1, 0:-1])
     T = np.array(H[0:-1, -1])
 
-    return R, T
+    if abs(T[0]) > 5 or abs(T[1]) > 5:
+        return None
+    else:
+        x = pose[0] + T[0]
+        y = pose[1] + T[1]
+        orientation = wrapAngle(pose[2] + np.arctan2(R[1][0], R[0][0]))
+
+        return np.array((x, y, orientation))
 
 
 def update_homogeneous_matrix(Hin, R, T):

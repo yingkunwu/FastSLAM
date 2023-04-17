@@ -7,7 +7,8 @@ from world import World
 from robot import Robot
 from motion_model import MotionModel
 from measurement_model import MeasurementModel
-from utils import absolute2relative, relative2absolute, scan_matching, visualize
+from utils import absolute2relative, relative2absolute, visualize
+from icp import icp_matching
 from config import *
 
 
@@ -68,7 +69,7 @@ if __name__ == "__main__":
             tmp = np.where(p[i].grid >= 0.9)
             edges = np.stack((tmp[1], tmp[0])).T
             # refine guess pose by scan matching
-            pose_hat = scan_matching(edges, scan, guess_pose)
+            pose_hat = icp_matching(edges, scan, guess_pose)
 
             # If the scan matching fails, the pose and the weights are computed according to the motion model
             if pose_hat is not None:
@@ -118,9 +119,9 @@ if __name__ == "__main__":
             p[i].update_trajectory()
 
             # Update occupancy grid based on the true measurements
-            p_odo = p[i].get_state()
-            free_grid = relative2absolute(free_grid_offset_star, p_odo).astype(np.int32)
-            occupy_grid = relative2absolute(occupy_grid_offset_star, p_odo).astype(np.int32)
+            curr_pose = p[i].get_state()
+            free_grid = relative2absolute(free_grid_offset_star, curr_pose).astype(np.int32)
+            occupy_grid = relative2absolute(occupy_grid_offset_star, curr_pose).astype(np.int32)
             p[i].update_occupancy_grid(free_grid, occupy_grid)
 
         # normalize

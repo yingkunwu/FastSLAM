@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from icp import icp_matching
-fig, (ax1, ax2) = plt.subplots(1, 2)
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 6))
+
 
 # Bresenhams Line Generation Algorithm
 # ref: https://www.geeksforgeeks.org/bresenhams-line-generation-algorithm/
@@ -46,25 +46,6 @@ def bresenham(x1, y1, x2, y2):
             pk = pk + 2 * dy - 2 * dx
 
     return loc
-
-
-def scan_matching(prev_points, curr_points, pose):
-    if len(prev_points) < 5 or len(curr_points) < 5 or len(prev_points) < len(curr_points):
-        return None
-    
-    # delete duplicates
-    curr_points = np.unique(curr_points, axis=0)
-
-    R, t = icp_matching(prev_points.T, curr_points.T)
-
-    if abs(t[0]) > 5 or abs(t[1]) > 5:
-        return None
-    else:
-        x = pose[0] + t[0]
-        y = pose[1] + t[1]
-        orientation = wrapAngle(pose[2] + np.arctan2(R[1][0], R[0][0]))
-
-        return np.array((x, y, orientation))
 
 
 def wrapAngle(radian):
@@ -157,7 +138,7 @@ def visualize(robot, particles, best_particle, radar_list, step, title, output_p
     ax2.plot(robot.x, robot.y, "bo")
 
     if step % 10 == 0:
-        plt.savefig('{}_{}.png'.format(output_path, step))
+        plt.savefig('{}_{}.png'.format(output_path, step), bbox_inches='tight')
 
     if visualize:
         plt.draw()
