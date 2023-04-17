@@ -34,7 +34,7 @@ class Robot(object):
 
         # parameters for beam range sensor
         self.num_sensors = config['num_sensors']
-        self.radar_theta = (np.arange(0, self.num_sensors) - self.num_sensors // 2) * (np.pi / self.num_sensors)
+        self.radar_theta = np.arange(0, self.num_sensors) * (2 * np.pi / self.num_sensors)
         self.radar_length = config['radar_length']
         self.radar_range = config['radar_range']
 
@@ -95,7 +95,7 @@ class Robot(object):
             dist = np.linalg.norm(beam - loc, axis=1)
             beam = np.array(beam)
 
-            obstacle_position = np.where(self.grid[beam[:, 1], beam[:, 0]] > 0.5)[0]
+            obstacle_position = np.where(self.grid[beam[:, 1], beam[:, 0]] >= 0.9)[0]
             if len(obstacle_position) > 0:
                 idx = obstacle_position[0]
                 occupy_grid.append(list(beam[idx]))

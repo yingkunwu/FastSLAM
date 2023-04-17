@@ -88,12 +88,8 @@ def nearest_neighbor_association(prev_points, curr_points):
 
     indexes = np.argmin(d, axis=1)
     error = np.min(d, axis=1)
-    mask = error < 2
 
-    previous_points_matched = prev_points[:, indexes][:, mask]
-    current_points_matched = curr_points[:, mask]
-
-    return previous_points_matched, current_points_matched, np.sum(error)
+    return prev_points[:, indexes], curr_points, np.sum(error)
 
 
 def svd_motion_estimation(previous_points, current_points):

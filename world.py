@@ -17,13 +17,5 @@ class World(object):
         self.grid = np.zeros((self.height, self.width))
         self.grid[(color != (255, 255, 255)).any(axis=2)] = 1
 
-        grayscale = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        edges = cv2.Canny(grayscale, 100, 200, True)
-        tmp = np.where(edges > 0)
-        self.edges = np.stack((tmp[1], tmp[0])).T
-
     def get_grid(self):
         return self.grid
-    
-    def get_edges(self):
-        return self.edges

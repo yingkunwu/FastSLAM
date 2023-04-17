@@ -49,35 +49,20 @@ def bresenham(x1, y1, x2, y2):
     return loc
 
 
-def data_association(prev_points, curr_points):
-    prev_points = np.array(prev_points)
-    curr_points = np.array(curr_points)
-
-    prev_points_matched, curr_points_matched = [], []
-    for i in range(len(curr_points)):
-        diff = np.sum(np.power(curr_points[i] - prev_points, 2), axis=1)
-        minIdx = np.argmin(diff)
-        prev_points_matched.append(prev_points[minIdx])
-        curr_points_matched.append(curr_points[i])
-
-    return np.array(prev_points_matched), np.array(curr_points_matched)
-
-
 def scan_matching(prev_points, curr_points, pose):
     if len(prev_points) < 5 or len(curr_points) < 5 or len(prev_points) < len(curr_points):
         return None
 
     prev_points = np.array(prev_points)
     curr_points = np.array(curr_points)
+    
     # delete duplicates
     curr_points = np.unique(curr_points, axis=0)
-    #prev_points, curr_points = data_association(prev_points, curr_points)
 
     R, t = icp_matching(prev_points.T, curr_points.T)
 
     if abs(t[0]) > 5 or abs(t[1]) > 5:
         return None
-    print(t, np.arctan2(R[1][0], R[0][0]))
     
     x = pose[0] - t[0]
     y = pose[1] - t[1]

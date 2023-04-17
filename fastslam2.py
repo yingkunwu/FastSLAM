@@ -11,7 +11,6 @@ from utils import absolute2relative, relative2absolute, visualize
 from config import *
 
 import matplotlib.pyplot as plt
-from icp import plot_points
 from utils import scan_matching
 
 
@@ -22,7 +21,7 @@ if __name__ == "__main__":
     output_path = config['output_path']
     if not os.path.exists(output_path):
         os.mkdir(output_path)
-    output_path = os.path.join(output_path, "fastslam2")
+    output_path = os.path.join(output_path, "fastslam3")
     if not os.path.exists(output_path):
         os.mkdir(output_path)
     output_path = os.path.join(output_path, name)
@@ -31,7 +30,6 @@ if __name__ == "__main__":
     world = World()
     world.read_map(config['map'])
     world_grid = world.get_grid()
-    edges_star = world.get_edges()
 
     # create a robot
     (x, y, theta) = config['R_init']
@@ -63,17 +61,12 @@ if __name__ == "__main__":
         z_star, free_grid_star, occupy_grid_star = R.sense()
         free_grid_offset_star = absolute2relative(free_grid_star, curr_odo)
         occupy_grid_offset_star = absolute2relative(occupy_grid_star, curr_odo)
-        #occupy_grid_star = relative2absolute(occupy_grid_offset_star, prev_odo)
-        #edges_offset = absolute2relative(edges_star, prev_odo)
-        #prev_odo = curr_odo
-        #plot_points(np.array(edges_star).T, np.array(occupy_grid_star).T, fig)
-        #continue
 
         for i in range(NUMBER_OF_PARTICLES):
             prev_pose = p[i].get_state()
             tmp_r = Robot(0, 0, 0, config, p[i].grid)
 
-            best_guess = -1
+            """best_guess = -1
             pose_hat = None
             for j in range(NUMBER_OF_MODE_SAMPLES):
                 x, y, theta = motion_model.sample_motion_model(prev_odo, curr_odo, prev_pose)
@@ -82,38 +75,17 @@ if __name__ == "__main__":
                 guess = measurement_model.measurement_model(z_star, z)
                 if guess > best_guess:
                     best_guess = guess
-                    pose_hat = (x, y, theta)
+                    pose_hat = (x, y, theta)"""
 
-            #guess_pose = motion_model.sample_motion_model(prev_odo, curr_odo, prev_pose)
-            #scan = relative2absolute(occupy_grid_offset_star, prev_pose)
-            #tmp = np.where(p[i].grid > 0.5)
-            #edges = np.stack((tmp[1], tmp[0])).T
+            guess_pose = motion_model.sample_motion_model(prev_odo, curr_odo, prev_pose)
+            scan = relative2absolute(occupy_grid_offset_star, guess_pose).astype(np.int32)
+            tmp = np.where(p[i].grid >= 0.9)
+            edges = np.stack((tmp[1], tmp[0])).T
             
-            #plot_points(np.array(edges).T, np.array(scan).T, fig)
-            #pose_hat = scan_matching(edges, scan, prev_pose)
+            pose_hat = scan_matching(edges, scan, guess_pose)
 
             # If the scan matching fails, the pose and the weights are computed according to the motion model
-            if best_guess > 0:
-                """tmp_samples = [None] * NUMBER_OF_MODE_SAMPLES * 2
-                z_list = np.zeros(NUMBER_OF_MODE_SAMPLES * 2)
-                tmp_r = Robot(0, 0, 0, config, p[i].grid)
-                prev_pose = p[i].get_state()
-                for j in range(NUMBER_OF_MODE_SAMPLES * 2):
-                    x, y, theta = motion_model.sample_motion_model(prev_odo, curr_odo, prev_pose)
-                    tmp_samples[j] = (x, y, theta)
-                    tmp_r.set_states(x, y, theta)
-                    z, _, _ = tmp_r.sense()
-                    z_list[j] = measurement_model.measurement_model(z_star, z)
-
-                tmp_idx = np.argsort(z_list)[:NUMBER_OF_MODE_SAMPLES]
-                z_list = z_list[tmp_idx]
-                samples = [None] * NUMBER_OF_MODE_SAMPLES
-                for l, k in enumerate(tmp_idx):
-                    samples[l] = tmp_samples[k]
-                    
-                # Compute gaussain proposal
-                likelihoods = z_list"""
-                
+            if pose_hat is not None:
                 # Sample around the mode
                 samples = np.random.multivariate_normal(pose_hat, mode_sample_cov, NUMBER_OF_MODE_SAMPLES)
                 # Compute gaussain proposal
@@ -128,22 +100,20 @@ if __name__ == "__main__":
                     measurement_prob = measurement_model.measurement_model(z_star, z)
 
                     likelihoods[j] = motion_prob * measurement_prob
-                    #likelihoods[j] = measurement_prob
                     
-
                 eta = np.sum(likelihoods)
+                if eta > 0:
+                    pose_mean = np.sum(samples * likelihoods[:, np.newaxis], axis=0)
+                    pose_mean = pose_mean / eta
 
-                pose_mean = np.sum(samples * likelihoods[:, np.newaxis], axis=0)
-                pose_mean = pose_mean / eta
+                    tmp = samples - pose_mean
+                    pose_cov = tmp.T @ (tmp * likelihoods[:, np.newaxis])
+                    pose_cov = pose_cov / eta
 
-                tmp = samples - pose_mean
-                pose_cov = tmp.T @ (tmp * likelihoods[:, np.newaxis])
-                pose_cov = pose_cov / eta
-
-                # Sample new pose of the particle from the gaussian proposal
-                new_pose = np.random.multivariate_normal(pose_mean, pose_cov, 1)
-                x, y, theta = new_pose[0]
-                p[i].set_states(x, y, theta)
+                    # Sample new pose of the particle from the gaussian proposal
+                    new_pose = np.random.multivariate_normal(pose_mean, pose_cov, 1)
+                    x, y, theta = new_pose[0]
+                    p[i].set_states(x, y, theta)
 
                 # Update weight
                 w[i] *= eta
