@@ -6,7 +6,7 @@ fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 6))
 
 # Bresenhams Line Generation Algorithm
 # ref: https://www.geeksforgeeks.org/bresenhams-line-generation-algorithm/
-def bresenham(x1, y1, x2, y2):
+def bresenham(x1, y1, x2, y2, w, h):
     x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
     dx = abs(x2 - x1)
     dy = abs(y2 - y1)
@@ -22,6 +22,9 @@ def bresenham(x1, y1, x2, y2):
 
     loc = []
     for _ in range(0, dx + 1):
+        if (x1 < 0 or y1 < 0) or (steep == 0 and (x1 >= h or y1 >= w)) or (steep == 1 and (x1 >= w or y1 >= h)):
+            break
+
         if steep == 0:
             loc.append([x1, y1])
         else:

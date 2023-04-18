@@ -30,7 +30,7 @@ class Robot(object):
 
         # parameters for beam range sensor
         self.num_sensors = config['num_sensors']
-        self.radar_theta = np.arange(0, self.num_sensors) * (2 * np.pi / self.num_sensors)
+        self.radar_theta = np.arange(0, self.num_sensors) * (2 * np.pi / self.num_sensors) + np.pi / self.num_sensors
         self.radar_length = config['radar_length']
         self.radar_range = config['radar_range']
 
@@ -68,15 +68,13 @@ class Robot(object):
             ), axis=0
         )
 
-        radar_dest = np.zeros_like(radar_rel_dest)
-        radar_dest[0, :] = np.clip(radar_rel_dest[0, :] + radar_src[0, :], 0, self.grid_size[1] - 1)
-        radar_dest[1, :] = np.clip(radar_rel_dest[1, :] + radar_src[1, :], 0, self.grid_size[0] - 1)
+        radar_dest = radar_rel_dest + radar_src
 
         beams = [None] * self.num_sensors
         for i in range(self.num_sensors):
             x1, y1 = radar_src[:, i]
             x2, y2 = radar_dest[:, i]
-            beams[i] = bresenham(x1, y1, x2, y2)
+            beams[i] = bresenham(x1, y1, x2, y2, self.grid_size[0], self.grid_size[1])
 
         return beams
     
