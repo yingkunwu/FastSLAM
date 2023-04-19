@@ -5,25 +5,22 @@ from utils import *
 
 
 class Robot(object):
-    def __init__(self, x, y, theta, config, grid=None, sense_noise=None):
+    def __init__(self, x, y, theta, grid, config, sense_noise=None):
         # initialize robot pose
         self.x = x
         self.y = y
         self.theta = theta
         self.trajectory = []
 
+        # map that robot navigates in
+        # for particles, it is a map with prior probability
+        self.grid = grid
+        self.grid_size = self.grid.shape
+
         # probability for updating occupancy map
         self.prior_prob = config['prior_prob']
         self.occupy_prob = config['occupy_prob']
         self.free_prob = config['free_prob']
-
-        # initialize map occupancy probability
-        if grid is not None:
-            self.grid = grid
-            self.grid_size = self.grid.shape
-        else:
-            self.grid_size = config['grid_size']
-            self.grid = np.ones(self.grid_size) * self.prior_prob
 
         # sensing noise for trun robot measurement
         self.sense_noise = sense_noise if sense_noise is not None else 0.0

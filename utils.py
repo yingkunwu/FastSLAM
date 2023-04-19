@@ -54,6 +54,10 @@ def bresenham(x1, y1, x2, y2, w, h):
 def wrapAngle(radian):
     radian = radian - 2 * np.pi * np.floor((radian + np.pi) / (2 * np.pi))
     return radian
+
+
+def degree2radian(degree):
+    return degree / 180 * np.pi
     
 
 def prob2logodds(prob):

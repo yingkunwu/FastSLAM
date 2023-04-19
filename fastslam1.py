@@ -2,18 +2,35 @@ import numpy as np
 import random
 import copy
 import os
+import argparse
+import yaml
 
 from world import World
 from robot import Robot
 from motion_model import MotionModel
 from measurement_model import MeasurementModel
-from utils import absolute2relative, relative2absolute, visualize
-from config import *
+from utils import absolute2relative, relative2absolute, degree2radian, visualize
 
 
 if __name__ == "__main__":
-    name = 'scene-2'
-    config = SCENCES[name]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-m", "--map", type=str, default="scene-1", help="map that robot navigates in")
+    parser.add_argument("-p", "--particles", type=int, default=100, help="number of particles")
+    args = parser.parse_args()
+
+    maps = ['scene-1', 'scene-2']
+    assert args.map in maps, "Please specify one of the map in {}.".format(maps)
+    assert 0 < args.particles < 200, "The number of particles should be larger than 0 and smaller than a reasonable value."
+
+    with open("config.yaml", "r") as stream:
+        try:
+            config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            print(exc)
+
+    ROBOT = config['robot']
+    SCENE = config[args.map]
+    NUMBER_OF_PARTICLES = args.particles
 
     output_path = config['output_path']
     if not os.path.exists(output_path):
@@ -21,33 +38,34 @@ if __name__ == "__main__":
     output_path = os.path.join(output_path, "fastslam1")
     if not os.path.exists(output_path):
         os.mkdir(output_path)
-    output_path = os.path.join(output_path, name)
+    output_path = os.path.join(output_path, args.map)
 
     # create a world map
     world = World()
-    world.read_map(config['map'])
+    world.read_map(SCENE['map'])
     world_grid = world.get_grid()
 
     # create a robot
-    (x, y, theta) = config['R_init']
-    R = Robot(x, y, theta, config, world_grid, sense_noise=3.0)
+    (x, y, theta) = SCENE['R_init']
+    R = Robot(x, y, degree2radian(theta), world_grid, ROBOT, sense_noise=3.0)
     prev_odo = curr_odo = R.get_state()
 
     # initialize particles
     p = [None] * NUMBER_OF_PARTICLES
-    (x, y, theta) = config['p_init']
+    (x, y, theta) = SCENE['p_init']
+    init_grid = np.ones(SCENE['grid_size']) * ROBOT['prior_prob']
     for i in range(NUMBER_OF_PARTICLES):
-        p[i] = Robot(x, y, theta, config)
+        p[i] = Robot(x, y, degree2radian(theta), copy.deepcopy(init_grid), ROBOT)
 
     # create motion model
     motion_model = MotionModel(config['motion_model'])
 
     # create measurement model
-    measurement_model = MeasurementModel(config['measurement_model'], config['radar_range'])
+    measurement_model = MeasurementModel(config['measurement_model'], ROBOT['radar_range'])
 
     # FastSLAM1.0
-    for idx, (forward, turn) in enumerate(config['controls']):
-        R.move(turn=turn, forward=forward)
+    for idx, (forward, turn) in enumerate(SCENE['controls']):
+        R.move(turn=degree2radian(turn), forward=forward)
         curr_odo = R.get_state()
         R.update_trajectory()
 
