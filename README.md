@@ -5,7 +5,7 @@ Final project for UMN CSCI 5512 Artificial Intelligence II course
 
 ### Introduction
 
-In this project, I implemented FastSLAM1.0 and FastSLAM2.0 algorithms with grid map in python. The program is able to work in any given grid map as long as the environment is static and each grid is either free (0) or occupied (1).
+The purpose of this project is to simulate a Simultaneously Localization and Mapping problem by allowing a robot with beam sensors to navigate in a 2D grid map. In this project, I implemented both the famous particle filter based SLAM algorithm, FastSLAM1.0 and FastSLAM2.0, in python. The program is able to work in any given grid map as long as the environment is static and each grid is either free (0) or occupied (1).
 
 ### Usage
 
@@ -25,15 +25,15 @@ For now the given map should be either 'scene-1' or 'scene-2', and the number of
 
 #### FastSLAM 1.0
 
-<img src="https://github.com/kunnnnethan/FastSLAM/blob/main/result/fastslam1-scene1.png" alt="result" width=50% height=50%/>
+<img src="https://github.com/kunnnnethan/FastSLAM/blob/main/result/fastslam1-scene1.png" alt="result" width=70% height=70%/>
 
-<img src="https://github.com/kunnnnethan/FastSLAM/blob/main/result/fastslam1-scene2.png" alt="result" width=50% height=50%/>
+<img src="https://github.com/kunnnnethan/FastSLAM/blob/main/result/fastslam1-scene2.png" alt="result" width=70% height=70%/>
 
 #### FastSLAM 2.0
 
-<img src="https://github.com/kunnnnethan/FastSLAM/blob/main/result/fastslam2-scene1.png" alt="result" width=50% height=50%/>
+<img src="https://github.com/kunnnnethan/FastSLAM/blob/main/result/fastslam2-scene1.png" alt="result" width=70% height=70%/>
 
-<img src="https://github.com/kunnnnethan/FastSLAM/blob/main/result/fastslam2-scene2.png" alt="result" width=50% height=50%/>
+<img src="https://github.com/kunnnnethan/FastSLAM/blob/main/result/fastslam2-scene2.png" alt="result" width=70% height=70%/>
 
 
 ### References
