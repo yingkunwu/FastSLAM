@@ -38,8 +38,8 @@ For now the given map should be either 'scene-1' or 'scene-2', and the number of
 
 ### References
 
-* FastSLAM: A Factored Solution to the Simultaneous Localization and Mapping Problem
-* Improved Techniques for Grid Mapping with Rao-Blackwellized Particle Filters
+* Michael Montemerlo, Sebastian Thrun, Daphne Koller, and Ben Wegbreit. Fastslam: A factored solution to the simultaneous localization and mapping problem.
+* Giorgio Grisetti, Cyrill Stachniss, and Wolfram Burgard. Improved techniques for grid mapping with rao- blackwellized particle filters.
 * https://github.com/udacity/RoboND-MCL-Lab
 * https://github.com/ivanwong9290/CMU_16833_SLAM/tree/ae5a127fadb64b9cf3e2de51b26d2ad339e50b6a
 * https://bostoncleek.github.io/project/fast-slam
